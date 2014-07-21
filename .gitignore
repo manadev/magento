@@ -1,0 +1,7 @@
+/htdocs/.gitignore
+/htdocs/app/etc/local.xml
+/htdocs/includes/src/
+/htdocs/media/
+/htdocs/var/
+/vendor/
+/.modman
