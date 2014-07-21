@@ -80,7 +80,7 @@ abstract class Mage_Rule_Model_Condition_Abstract
                 'date'        => array('==', '>=', '<='),
                 'select'      => array('==', '!='),
                 'boolean'     => array('==', '!='),
-                'multiselect' => array('==', '!=', '{}', '!{}'),
+                'multiselect' => array('{}', '!{}', '()', '!()'),
                 'grid'        => array('()', '!()'),
             );
         }
@@ -254,7 +254,7 @@ abstract class Mage_Rule_Model_Condition_Abstract
         $value = $this->getData('value');
 
         $op = $this->getOperator();
-        if (($op==='()' || $op==='!()') && is_string($value)) {
+        if (($op === '{}' || $op === '!{}' || $op==='()' || $op==='!()') && is_scalar($value)) {
             $value = preg_split('#\s*[,;]\s*#', $value, null, PREG_SPLIT_NO_EMPTY);
             $this->setValue($value);
         }
@@ -266,8 +266,10 @@ abstract class Mage_Rule_Model_Condition_Abstract
     {
         if ($this->getInputType()=='date' && !$this->getIsValueParsed()) {
             // date format intentionally hard-coded
-            $this->setValue(Mage::app()->getLocale()->date($this->getData('value'), Varien_Date::DATE_INTERNAL_FORMAT, null, false)
-                ->toString(Varien_Date::DATE_INTERNAL_FORMAT));
+            $this->setValue(
+                Mage::app()->getLocale()->date($this->getData('value'),
+                Varien_Date::DATE_INTERNAL_FORMAT, null, false)->toString(Varien_Date::DATE_INTERNAL_FORMAT)
+            );
             $this->setIsValueParsed(true);
         }
         return $this->getData('value');
@@ -511,8 +513,13 @@ abstract class Mage_Rule_Model_Condition_Abstract
         $op = $this->getOperator();
 
         // if operator requires array and it is not, or on opposite, return false
-        if ((($op=='()' || $op=='!()') && !is_array($value))
-            || (!($op=='()' || $op=='!()' || $op=='!=' || $op=='==' || $op=='{}' || $op=='!{}') && is_array($value))) {
+        if ((
+            ($op == '()' || $op == '!()' || $op == '{}' || $op == '!{}')
+            && !is_array($value)
+            ) || (
+                !($op == '()' || $op == '!()' || $op == '{}' || $op == '!{}' || $op == '==' || $op == '!=')
+                && is_array($value)
+            )) {
             return false;
         }
 
@@ -522,8 +529,8 @@ abstract class Mage_Rule_Model_Condition_Abstract
             case '==': case '!=':
                 if (is_array($value)) {
                     if (is_array($validatedValue)) {
-                        $result = array_diff($validatedValue, $value);
-                        $result = empty($result) && (sizeof($validatedValue) == sizeof($value));
+                        $result = array_intersect($value, $validatedValue);
+                        $result = !empty($result);
                     } else {
                         return false;
                     }
@@ -531,7 +538,7 @@ abstract class Mage_Rule_Model_Condition_Abstract
                     if (is_array($validatedValue)) {
                         $result = in_array($value, $validatedValue);
                     } else {
-                        $result = $validatedValue==$value;
+                        $result = $validatedValue == $value;
                     }
                 }
                 break;
@@ -553,10 +560,17 @@ abstract class Mage_Rule_Model_Condition_Abstract
                 break;
 
             case '{}': case '!{}':
-                if (is_array($value)) {
+                if (is_scalar($validatedValue) && is_array($value)) {
+                    foreach ($value as $item) {
+                        if (stripos($validatedValue,$item)!==false) {
+                            $result = true;
+                            break;
+                        }
+                    }
+                } elseif (is_array($value)) {
                     if (is_array($validatedValue)) {
-                        $result = array_diff($value, $validatedValue);
-                        $result = empty($result);
+                        $result = array_intersect($value, $validatedValue);
+                        $result = !empty($result);
                     } else {
                         return false;
                     }

@@ -56,7 +56,7 @@ class Mage_Catalog_Model_Product_Api extends Mage_Catalog_Model_Api_Resource
     public function items($filters = null, $store = null)
     {
         $collection = Mage::getModel('catalog/product')->getCollection()
-            ->setStoreId($this->_getStoreId($store))
+            ->addStoreFilter($this->_getStoreId($store))
             ->addAttributeToSelect('name');
 
         if (is_array($filters)) {
@@ -130,18 +130,20 @@ class Mage_Catalog_Model_Product_Api extends Mage_Catalog_Model_Api_Resource
      *
      * @param string $type
      * @param int $set
+     * @param string $sku
      * @param array $productData
+     * @param string $store
      * @return int
      */
-    public function create($type, $set, $sku, $productData)
+    public function create($type, $set, $sku, $productData, $store = null)
     {
         if (!$type || !$set || !$sku) {
             $this->_fault('data_invalid');
         }
 
+        /** @var $product Mage_Catalog_Model_Product */
         $product = Mage::getModel('catalog/product');
-        /* @var $product Mage_Catalog_Model_Product */
-        $product->setStoreId($this->_getStoreId())
+        $product->setStoreId($this->_getStoreId($store))
             ->setAttributeSetId($set)
             ->setTypeId($type)
             ->setSku($sku);

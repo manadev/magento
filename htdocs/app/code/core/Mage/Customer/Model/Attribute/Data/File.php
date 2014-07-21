@@ -35,6 +35,13 @@
 class Mage_Customer_Model_Attribute_Data_File extends Mage_Customer_Model_Attribute_Data_Abstract
 {
     /**
+     * Validator for check not protected extensions
+     *
+     * @var Mage_Core_Model_File_Validator_NotProtectedExtension
+     */
+    protected $_validatorNotProtectedExtensions;
+
+    /**
      * Extract data from request and return value
      *
      * @param Zend_Controller_Request_Http $request
@@ -100,10 +107,11 @@ class Mage_Customer_Model_Attribute_Data_File extends Mage_Customer_Model_Attrib
      */
     protected function _validateByRules($value)
     {
-        $label  = $this->getAttribute()->getStoreLabel();
+        $label  = Mage::helper('customer')->__($this->getAttribute()->getStoreLabel());
         $rules  = $this->getAttribute()->getValidateRules();
+        $extension  = pathinfo($value['name'], PATHINFO_EXTENSION);
+
         if (!empty($rules['file_extensions'])) {
-            $extension  = pathinfo($value['name'], PATHINFO_EXTENSION);
             $extensions = explode(',', $rules['file_extensions']);
             $extensions = array_map('trim', $extensions);
             if (!in_array($extension, $extensions)) {
@@ -111,6 +119,15 @@ class Mage_Customer_Model_Attribute_Data_File extends Mage_Customer_Model_Attrib
                     Mage::helper('customer')->__('"%s" is not a valid file extension.', $label)
                 );
             }
+        }
+
+        /**
+         * Check protected file extension
+         */
+        /** @var $validator Mage_Core_Model_File_Validator_NotProtectedExtension */
+        $validator = Mage::getSingleton('core/file_validator_notProtectedExtension');
+        if (!$validator->isValid($extension)) {
+            return $validator->getMessages();
         }
 
         if (!is_uploaded_file($value['tmp_name'])) {
@@ -140,31 +157,34 @@ class Mage_Customer_Model_Attribute_Data_File extends Mage_Customer_Model_Attrib
      */
     public function validateValue($value)
     {
-        if ($this->getIsAjaxRequest()) {
-            return true;
-        }
-
         $errors     = array();
         $attribute  = $this->getAttribute();
-        $label      = $attribute->getStoreLabel();
+        $label      = Mage::helper('customer')->__($attribute->getStoreLabel());
 
-        $toDelete   = !empty($value['delete']) ? true : false;
-        $toUpload   = !empty($value['tmp_name']) ? true : false;
+        if (is_array($value)) {
+            $toDelete   = !empty($value['delete']) ? true : false;
+            $toUpload   = !empty($value['tmp_name']) ? true : false;
 
-        if (!$toUpload && !$toDelete && $this->getEntity()->getData($attribute->getAttributeCode())) {
-            return true;
-        }
+            if (!$toUpload && !$toDelete && $this->getEntity()->getData($attribute->getAttributeCode())) {
+                return true;
+            }
 
-        if (!$attribute->getIsRequired() && !$toUpload) {
-            return true;
-        }
+            if (!$attribute->getIsRequired() && !$toUpload) {
+                return true;
+            }
 
-        if ($attribute->getIsRequired() && !$toUpload) {
-            $errors[] = Mage::helper('customer')->__('"%s" is a required value.', $label);
-        }
+            if ($attribute->getIsRequired() && !$toUpload) {
+                $errors[] = Mage::helper('customer')->__('"%s" is a required value.', $label);
+            }
 
-        if ($toUpload) {
-            $errors = array_merge($errors, $this->_validateByRules($value));
+            if ($toUpload) {
+                $errors = array_merge($errors, $this->_validateByRules($value));
+            }
+        } else {
+            $filePath = Mage::getBaseDir('media') . DS . 'customer' . $value;
+            if ($attribute->getIsRequired() && !file_exists($filePath)) {
+                $errors[] = Mage::helper('customer')->__('"%s" is a required value.', $label);
+            }
         }
 
         if (count($errors) == 0) {
@@ -214,7 +234,7 @@ class Mage_Customer_Model_Attribute_Data_File extends Mage_Customer_Model_Attrib
 
         if (!empty($value['tmp_name'])) {
             try {
-                $uploader = new Varien_File_Uploader($value);
+                $uploader = new Mage_Core_Model_File_Uploader($value);
                 $uploader->setFilesDispersion(true);
                 $uploader->setFilenamesCaseSensitivity(false);
                 $uploader->setAllowRenameFiles(true);

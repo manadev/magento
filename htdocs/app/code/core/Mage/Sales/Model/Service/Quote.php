@@ -168,6 +168,8 @@ class Mage_Sales_Model_Service_Quote
             $order->addItem($orderItem);
         }
 
+        $order->setQuote($quote);
+
         $transaction->addObject($order);
         $transaction->addCommitCallback(array($order, 'place'));
         $transaction->addCommitCallback(array($order, 'save'));
@@ -182,6 +184,15 @@ class Mage_Sales_Model_Service_Quote
             $this->_inactivateQuote();
             Mage::dispatchEvent('sales_model_service_quote_submit_success', array('order'=>$order, 'quote'=>$quote));
         } catch (Exception $e) {
+
+            //reset order ID's on exception, because order not saved
+            $order->setId(null);
+            /** @var $item Mage_Sales_Model_Order_Item */
+            foreach ($order->getItemsCollection() as $item) {
+                $item->setOrderId(null);
+                $item->setItemId(null);
+            }
+
             Mage::dispatchEvent('sales_model_service_quote_submit_failure', array('order'=>$order, 'quote'=>$quote));
             throw $e;
         }

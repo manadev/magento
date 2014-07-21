@@ -332,7 +332,7 @@ class Mage_Customer_Model_Customer extends Mage_Core_Model_Abstract
      */
     public function generatePassword($length=6)
     {
-        return substr(md5(uniqid(rand(), true)), 0, $length);
+        return Mage::helper('core')->getRandomString($length);
     }
 
     /**
@@ -514,11 +514,8 @@ class Mage_Customer_Model_Customer extends Mage_Core_Model_Abstract
         /* @var $translate Mage_Core_Model_Translate */
         $translate->setTranslateInline(false);
 
-        $storeId = ($storeId == '0')?$this->getSendemailStoreId():$storeId;
-        if ($this->getWebsiteId() != '0' && $storeId == '0') {
-            $storeIds = Mage::app()->getWebsite($this->getWebsiteId())->getStoreIds();
-            reset($storeIds);
-            $storeId = current($storeIds);
+        if (!$storeId) {
+            $storeId = $this->_getWebsiteStoreId($this->getSendemailStoreId());
         }
 
         Mage::getModel('core/email_template')
@@ -546,7 +543,8 @@ class Mage_Customer_Model_Customer extends Mage_Core_Model_Abstract
             return false;
         }
         if (null === self::$_isConfirmationRequired) {
-            self::$_isConfirmationRequired = 1 == Mage::getStoreConfig(self::XML_PATH_IS_CONFIRM, ($this->getStoreId() ? $this->getStoreId() : null));
+            $storeId = $this->getStoreId() ? $this->getStoreId() : null;
+            self::$_isConfirmationRequired = 1 == Mage::getStoreConfig(self::XML_PATH_IS_CONFIRM, $storeId);
         }
         return self::$_isConfirmationRequired;
     }
@@ -568,10 +566,8 @@ class Mage_Customer_Model_Customer extends Mage_Core_Model_Abstract
         $translate->setTranslateInline(false);
 
         $storeId = $this->getStoreId();
-        if ($this->getWebsiteId() != '0' && $storeId == '0') {
-            $storeIds = Mage::app()->getWebsite($this->getWebsiteId())->getStoreIds();
-            reset($storeIds);
-            $storeId = current($storeIds);
+        if (!$storeId) {
+            $storeId = $this->_getWebsiteStoreId();
         }
 
         Mage::getModel('core/email_template')
@@ -860,7 +856,7 @@ class Mage_Customer_Model_Customer extends Mage_Core_Model_Abstract
             // Handling billing address
             $billingAddress = $this->getPrimaryBillingAddress();
             if (!$billingAddress  instanceof Mage_Customer_Model_Address) {
-                $billingAddress = new Mage_Customer_Model_Address();
+                $billingAddress = Mage::getModel('customer/address');
             }
 
             $regions->addRegionNameFilter($row['billing_region'])->load();
@@ -899,7 +895,7 @@ class Mage_Customer_Model_Customer extends Mage_Core_Model_Abstract
             // Handling shipping address
             $shippingAddress = $this->getPrimaryShippingAddress();
             if (!$shippingAddress instanceof Mage_Customer_Model_Address) {
-                $shippingAddress = new Mage_Customer_Model_Address();
+                $shippingAddress = Mage::getModel('customer/address');
             }
 
             $regions->addRegionNameFilter($row['shipping_region'])->load();
@@ -1134,5 +1130,22 @@ class Mage_Customer_Model_Customer extends Mage_Core_Model_Abstract
             $this->setData('entity_type_id', $entityTypeId);
         }
         return $entityTypeId;
+    }
+    
+    /**
+     * Get either first store ID from a set website or the provided as default
+     *
+     * @param int|string|null $storeId
+     *
+     * @return int
+     */
+    protected function _getWebsiteStoreId($defaultStoreId = null)
+    {
+        if ($this->getWebsiteId() != 0 && empty($defaultStoreId)) {
+            $storeIds = Mage::app()->getWebsite($this->getWebsiteId())->getStoreIds();
+            reset($storeIds);
+            $defaultStoreId = current($storeIds);
+        }
+        return $defaultStoreId;
     }
 }

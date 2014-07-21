@@ -47,6 +47,13 @@ class Mage_Usa_Model_Shipping_Carrier_Ups
 
     protected $_defaultCgiGatewayUrl = 'http://www.ups.com:80/using/services/rave/qcostcgi.cgi';
 
+    /**
+     * Base currency rate
+     *
+     * @var double
+     */
+    protected $_baseCurrencyRate;
+
     public function collectRates(Mage_Shipping_Model_Rate_Request $request)
     {
         if (!$this->getConfigFlag('active')) {
@@ -99,7 +106,7 @@ class Mage_Usa_Model_Shipping_Carrier_Ups
         if ($request->getOrigCountry()) {
             $origCountry = $request->getOrigCountry();
         } else {
-            $origCountry = Mage::getStoreConfig('shipping/origin/country_id', $this->getStore());
+            $origCountry = Mage::getStoreConfig(Mage_Shipping_Model_Config::XML_PATH_ORIGIN_COUNTRY_ID, $this->getStore());
         }
 
         $r->setOrigCountry(Mage::getModel('directory/country')->load($origCountry)->getIso2Code());
@@ -107,7 +114,7 @@ class Mage_Usa_Model_Shipping_Carrier_Ups
         if ($request->getOrigRegionCode()) {
             $origRegionCode = $request->getOrigRegionCode();
         } else {
-            $origRegionCode = Mage::getStoreConfig('shipping/origin/region_id', $this->getStore());
+            $origRegionCode = Mage::getStoreConfig(Mage_Shipping_Model_Config::XML_PATH_ORIGIN_REGION_ID, $this->getStore());
             if (is_numeric($origRegionCode)) {
                 $origRegionCode = Mage::getModel('directory/region')->load($origRegionCode)->getCode();
             }
@@ -117,13 +124,13 @@ class Mage_Usa_Model_Shipping_Carrier_Ups
         if ($request->getOrigPostcode()) {
             $r->setOrigPostal($request->getOrigPostcode());
         } else {
-            $r->setOrigPostal(Mage::getStoreConfig('shipping/origin/postcode', $this->getStore()));
+            $r->setOrigPostal(Mage::getStoreConfig(Mage_Shipping_Model_Config::XML_PATH_ORIGIN_POSTCODE, $this->getStore()));
         }
 
         if ($request->getOrigCity()) {
             $r->setOrigCity($request->getOrigCity());
         } else {
-            $r->setOrigCity(Mage::getStoreConfig('shipping/origin/city', $this->getStore()));
+            $r->setOrigCity(Mage::getStoreConfig(Mage_Shipping_Model_Config::XML_PATH_ORIGIN_CITY, $this->getStore()));
         }
 
 
@@ -681,6 +688,23 @@ XMLRequest;
         return $this->_parseXmlResponse($xmlResponse);
     }
 
+    /**
+     * Get base currency rate
+     *
+     * @param string $code
+     * @return double
+     */
+    protected function _getBaseCurrencyRate($code)
+    {
+        if (!$this->_baseCurrencyRate) {
+            $this->_baseCurrencyRate = Mage::getModel('directory/currency')
+                ->load($code)
+                ->getAnyRate($this->_request->getBaseCurrency()->getCode());
+        }
+
+        return $this->_baseCurrencyRate;
+    }
+
     protected function _parseXmlResponse($xmlResponse)
     {
         $costArr = array();
@@ -690,7 +714,7 @@ XMLRequest;
             $xml->loadString($xmlResponse);
             $arr = $xml->getXpath("//RatingServiceSelectionResponse/Response/ResponseStatusCode/text()");
             $success = (int)$arr[0];
-            if($success===1){
+            if ($success===1) {
                 $arr = $xml->getXpath("//RatingServiceSelectionResponse/RatedShipment");
                 $allowedMethods = explode(",", $this->getConfigData('allowed_methods'));
 
@@ -699,6 +723,8 @@ XMLRequest;
                 $negotiatedActive = $this->getConfigFlag('negotiated_active')
                     && $this->getConfigData('shipper_number')
                     && !empty($negotiatedArr);
+
+                $allowedCurrencies = Mage::getModel('directory/currency')->getConfigAllowCurrencies();
 
                 foreach ($arr as $shipElement){
                     $code = (string)$shipElement->Service->Code;
@@ -711,8 +737,29 @@ XMLRequest;
                             $cost = $shipElement->TotalCharges->MonetaryValue;
                         }
 
-                        $costArr[$code] = $cost;
-                        $priceArr[$code] = $this->getMethodPrice(floatval($cost),$code);
+                        //convert price with Origin country currency code to base currency code
+                        $successConversion = true;
+                        $responseCurrencyCode = (string) $shipElement->TotalCharges->CurrencyCode;
+                        if ($responseCurrencyCode) {
+                            if (in_array($responseCurrencyCode, $allowedCurrencies)) {
+                                $cost *= $this->_getBaseCurrencyRate($responseCurrencyCode);
+                            } else {
+                                $errorTitle = Mage::helper('directory')
+                                    ->__('Can\'t convert rate from "%s-%s".',
+                                        $responseCurrencyCode,
+                                        $this->_request->getPackageCurrency()->getCode());
+                                $error = Mage::getModel('shipping/rate_result_error');
+                                $error->setCarrier('ups');
+                                $error->setCarrierTitle($this->getConfigData('title'));
+                                $error->setErrorMessage($errorTitle);
+                                $successConversion = false;
+                            }
+                        }
+
+                        if ($successConversion) {
+                            $costArr[$code] = $cost;
+                            $priceArr[$code] = $this->getMethodPrice(floatval($cost),$code);
+                        }
                     }
                 }
             } else {
@@ -721,7 +768,7 @@ XMLRequest;
                 $error = Mage::getModel('shipping/rate_result_error');
                 $error->setCarrier('ups');
                 $error->setCarrierTitle($this->getConfigData('title'));
-                //$error->setErrorMessage($errorTitle);
+                Mage::log($errorTitle);
                 $error->setErrorMessage($this->getConfigData('specificerrmsg'));
             }
         }
@@ -735,7 +782,7 @@ XMLRequest;
             if(!isset($errorTitle)){
                 $errorTitle = Mage::helper('usa')->__('Cannot retrieve shipping rates');
             }
-            //$error->setErrorMessage($errorTitle);
+            Mage::log($errorTitle);
             $error->setErrorMessage($this->getConfigData('specificerrmsg'));
             $result->append($error);
         } else {

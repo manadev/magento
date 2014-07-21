@@ -46,6 +46,7 @@ class Mage_Paypal_Model_Express extends Mage_Payment_Model_Method_Abstract
      * Availability options
      */
     protected $_isGateway                   = false;
+    protected $_canOrder                    = true;
     protected $_canAuthorize                = true;
     protected $_canCapture                  = true;
     protected $_canCapturePartial           = true;
@@ -141,9 +142,22 @@ class Mage_Paypal_Model_Express extends Mage_Payment_Model_Method_Abstract
     }
 
     /**
+     * Order payment
+     *
+     * @param Mage_Sales_Model_Order_Payment $payment
+     * @param float $amount
+     * @return Mage_Paypal_Model_Express
+     */
+    public function order(Varien_Object $payment, $amount)
+    {
+        return $this->_placeOrder($payment, $amount);
+    }
+
+    /**
      * Authorize payment
      *
      * @param Mage_Sales_Model_Order_Payment $payment
+     * @param float $amount
      * @return Mage_Paypal_Model_Express
      */
     public function authorize(Varien_Object $payment, $amount)
@@ -167,6 +181,7 @@ class Mage_Paypal_Model_Express extends Mage_Payment_Model_Method_Abstract
      * Capture payment
      *
      * @param Mage_Sales_Model_Order_Payment $payment
+     * @param float $amount
      * @return Mage_Paypal_Model_Express
      */
     public function capture(Varien_Object $payment, $amount)
@@ -181,6 +196,7 @@ class Mage_Paypal_Model_Express extends Mage_Payment_Model_Method_Abstract
      * Refund capture
      *
      * @param Mage_Sales_Model_Order_Payment $payment
+     * @param float $amount
      * @return Mage_Paypal_Model_Express
      */
     public function refund(Varien_Object $payment, $amount)
@@ -197,7 +213,8 @@ class Mage_Paypal_Model_Express extends Mage_Payment_Model_Method_Abstract
      */
     public function cancel(Varien_Object $payment)
     {
-        $this->_pro->cancel($payment);
+        $this->void($payment);
+
         return $this;
     }
 
@@ -276,9 +293,11 @@ class Mage_Paypal_Model_Express extends Mage_Payment_Model_Method_Abstract
      * @param Mage_Payment_Model_Recurring_Profile $profile
      * @param Mage_Payment_Model_Info $paymentInfo
      */
-    public function submitRecurringProfile(Mage_Payment_Model_Recurring_Profile $profile, Mage_Payment_Model_Info $paymentInfo)
-    {
-        $token = $paymentInfo->getAdditionalInformation(Mage_Paypal_Model_Express_Checkout::PAYMENT_INFO_TRANSPORT_TOKEN);
+    public function submitRecurringProfile(Mage_Payment_Model_Recurring_Profile $profile,
+        Mage_Payment_Model_Info $paymentInfo
+    ) {
+        $token = $paymentInfo->
+            getAdditionalInformation(Mage_Paypal_Model_Express_Checkout::PAYMENT_INFO_TRANSPORT_TOKEN);
         $profile->setToken($token);
         $this->_pro->submitRecurringProfile($profile, $paymentInfo);
     }
@@ -356,7 +375,8 @@ class Mage_Paypal_Model_Express extends Mage_Payment_Model_Method_Abstract
         $token = $payment->getAdditionalInformation(Mage_Paypal_Model_Express_Checkout::PAYMENT_INFO_TRANSPORT_TOKEN);
         $api = $this->_pro->getApi()
             ->setToken($token)
-            ->setPayerId($payment->getAdditionalInformation(Mage_Paypal_Model_Express_Checkout::PAYMENT_INFO_TRANSPORT_PAYER_ID))
+            ->setPayerId($payment->
+                getAdditionalInformation(Mage_Paypal_Model_Express_Checkout::PAYMENT_INFO_TRANSPORT_PAYER_ID))
             ->setAmount($amount)
             ->setPaymentAction($this->_pro->getConfig()->paymentAction)
             ->setNotifyUrl(Mage::getUrl('paypal/ipn/'))
@@ -382,7 +402,7 @@ class Mage_Paypal_Model_Express extends Mage_Payment_Model_Method_Abstract
     {
         $payment->setTransactionId($api->getTransactionId())->setIsTransactionClosed(0)
             ->setAdditionalInformation(Mage_Paypal_Model_Express_Checkout::PAYMENT_INFO_TRANSPORT_REDIRECT,
-                $api->getRedirectRequired() || $api->getRedirectRequested()
+                $api->getRedirectRequired()
             );
 
         if ($api->getBillingAgreementId()) {
@@ -393,5 +413,22 @@ class Mage_Paypal_Model_Express extends Mage_Payment_Model_Method_Abstract
         }
 
         $this->_pro->importPaymentInfo($api, $payment);
+    }
+
+    /**
+     * Check void availability
+     *
+     * @param   Varien_Object $payment
+     * @return  bool
+     */
+    public function canVoid(Varien_Object $payment)
+    {
+        if ($payment instanceof Mage_Sales_Model_Order_Invoice
+            || $payment instanceof Mage_Sales_Model_Order_Creditmemo
+        ) {
+            return false;
+        }
+
+        return $this->_canVoid;
     }
 }

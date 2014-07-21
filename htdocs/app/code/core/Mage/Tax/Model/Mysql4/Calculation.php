@@ -142,7 +142,9 @@ class Mage_Tax_Model_Mysql4_Calculation extends Mage_Core_Model_Mysql4_Abstract
 
             $currentRate += $value;
 
-            if (!isset($rates[$i+1]) || $rates[$i+1]['priority'] != $priority || (isset($rates[$i+1]['process']) && $rates[$i+1]['process'] != $rate['process'])) {
+            if (!isset($rates[$i+1]) || $rates[$i+1]['priority'] != $priority
+                || (isset($rates[$i+1]['process']) && $rates[$i+1]['process'] != $rate['process'])
+            ) {
                 $row['percent'] = (100+$totalPercent)*($currentRate/100);
                 $row['id'] = implode($ids);
                 $result[] = $row;
@@ -173,7 +175,7 @@ class Mage_Tax_Model_Mysql4_Calculation extends Mage_Core_Model_Mysql4_Abstract
             $strlen = $len;
         }
 
-        $strArr = array($postcode);
+        $strArr = array($postcode, $postcode . '*');
         if ($strlen > 1) {
             for ($i = 1; $i < $strlen; $i++) {
                 $strArr[] = sprintf('%s*', substr($postcode, 0, - $i));
@@ -231,12 +233,16 @@ class Mage_Tax_Model_Mysql4_Calculation extends Mage_Core_Model_Mysql4_Abstract
             $select->join(
                 array('rate'=>$this->getTable('tax/tax_calculation_rate')),
                 'rate.tax_calculation_rate_id = main_table.tax_calculation_rate_id',
-                array('value'=>'rate.rate', 'rate.tax_country_id', 'rate.tax_region_id', 'rate.tax_postcode', 'rate.tax_calculation_rate_id', 'rate.code')
+                array(
+                    'value'=>'rate.rate', 'rate.tax_country_id', 'rate.tax_region_id', 'rate.tax_postcode',
+                    'rate.tax_calculation_rate_id', 'rate.code'
+                )
             );
 
             $select->joinLeft(
                 array('title_table'=>$this->getTable('tax/tax_calculation_rate_title')),
-                "rate.tax_calculation_rate_id = title_table.tax_calculation_rate_id AND title_table.store_id = '{$storeId}'",
+                "rate.tax_calculation_rate_id = title_table.tax_calculation_rate_id "
+                . "AND title_table.store_id = '{$storeId}'",
                 array('title'=>'IFNULL(title_table.value, rate.code)')
             );
 
@@ -247,18 +253,24 @@ class Mage_Tax_Model_Mysql4_Calculation extends Mage_Core_Model_Mysql4_Abstract
             $selectClone = clone $select;
 
             $select
-                ->where("rate.zip_is_range IS NULL")
-                ->where("rate.tax_postcode in ('*', '', ?)", $this->_createSearchPostCodeTemplates($postcode));
-
+                ->where("rate.zip_is_range IS NULL");
             $selectClone
-                ->where("rate.zip_is_range IS NOT NULL")
-                ->where("? BETWEEN rate.zip_from AND rate.zip_to", $postcode);
+                ->where("rate.zip_is_range IS NOT NULL");
+
+            if ($request->getPostcode() != '*') {
+                $select
+                    ->where("rate.tax_postcode in ('*', '', ?)", $this->_createSearchPostCodeTemplates($postcode));
+                $selectClone
+                    ->where("? BETWEEN rate.zip_from AND rate.zip_to", $postcode);
+            }
 
             /**
              * @see ZF-7592 issue http://framework.zend.com/issues/browse/ZF-7592
              */
             $select = $this->_getReadAdapter()->select()->union(array('(' . $select . ')', '(' . $selectClone . ')'));
-            $order = array('priority ASC', 'tax_calculation_rule_id ASC', 'tax_country_id DESC', 'tax_region_id DESC', 'tax_postcode DESC', 'value DESC');
+            $order = array('priority ASC', 'tax_calculation_rule_id ASC', 'tax_country_id DESC', 'tax_region_id DESC',
+                'tax_postcode DESC', 'value DESC'
+            );
             $select->order($order);
 
             $this->_ratesCache[$cacheKey] = $this->_getReadAdapter()->fetchAll($select);
@@ -311,24 +323,27 @@ class Mage_Tax_Model_Mysql4_Calculation extends Mage_Core_Model_Mysql4_Abstract
 
     public function getRatesByCustomerTaxClass($customerTaxClass, $productTaxClass = null)
     {
+        $customerTaxClass = (int) $customerTaxClass;
+
         $calcJoinConditions  = "calc_table.tax_calculation_rate_id = main_table.tax_calculation_rate_id";
         $calcJoinConditions .= " AND calc_table.customer_tax_class_id = '{$customerTaxClass}'";
         if ($productTaxClass) {
+            $productTaxClass = (int) $productTaxClass;
             $calcJoinConditions .= " AND calc_table.product_tax_class_id = '{$productTaxClass}'";
         }
 
         $selectCSP = $this->_getReadAdapter()->select();
-        $selectCSP->from(array('main_table'=>$this->getTable('tax/tax_calculation_rate')), array('country'=>'tax_country_id', 'region_id'=>'tax_region_id', 'postcode'=>'tax_postcode'))
+        $selectCSP->from(array('main_table'=>$this->getTable('tax/tax_calculation_rate')),
+            array('country'=>'tax_country_id', 'region_id'=>'tax_region_id', 'postcode'=>'tax_postcode')
+        )
             ->joinInner(
                     array('calc_table'=>$this->getTable('tax/tax_calculation')),
                     $calcJoinConditions,
                     array('product_class'=>'calc_table.product_tax_class_id'))
-
             ->joinLeft(
                     array('state_table'=>$this->getTable('directory/country_region')),
                     'state_table.region_id = main_table.tax_region_id',
                     array('region_code'=>'state_table.code'))
-
             ->distinct(true);
 
         $CSP = $this->_getReadAdapter()->fetchAll($selectCSP);

@@ -243,6 +243,19 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
     }
 
     /**
+     * Loading quote by identifier
+     *
+     * @param int $quoteId
+     * @return Mage_Sales_Model_Quote
+     */
+    public function loadByIdWithoutStore($quoteId)
+    {
+        $this->_getResource()->loadByIdWithoutStore($this, $quoteId);
+        $this->_afterLoad();
+        return $this;
+    }
+
+    /**
      * Assign customer model object data to quote
      *
      * @param   Mage_Customer_Model_Customer $customer
@@ -347,13 +360,14 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
     public function getCustomerTaxClassId()
     {
         /*
-        * tax class can vary at any time. so instead of using the value from session, we need to retrieve from db everytime
-        * to get the correct tax class
+        * tax class can vary at any time. so instead of using the value from session,
+        * we need to retrieve from db everytime to get the correct tax class
         */
         //if (!$this->getData('customer_group_id') && !$this->getData('customer_tax_class_id')) {
-            $classId = Mage::getModel('customer/group')->getTaxClassId($this->getCustomerGroupId());
-            $this->setCustomerTaxClassId($classId);
+        $classId = Mage::getModel('customer/group')->getTaxClassId($this->getCustomerGroupId());
+        $this->setCustomerTaxClassId($classId);
         //}
+
         return $this->getData('customer_tax_class_id');
     }
 
@@ -624,6 +638,23 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
     }
 
     /**
+     * Checking product exist in Quote
+     *
+     * @param int $productId
+     * @return bool
+     */
+    public function hasProductId($productId)
+    {
+        foreach ($this->getAllItems() as $item) {
+            if ($item->getProductId() == $productId) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Retrieve item model object by item identifier
      *
      * @param   int $itemId
@@ -642,7 +673,9 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
      */
     public function removeItem($itemId)
     {
-        if ($item = $this->getItemById($itemId)) {
+        $item = $this->getItemById($itemId);
+
+        if ($item) {
             $item->setQuote($this);
             /**
              * If we remove item from quote - we can't use multishipping mode
@@ -654,8 +687,15 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
                     $child->isDeleted(true);
                 }
             }
+
+            $parent = $item->getParentItem();
+            if ($parent) {
+                $parent->isDeleted(true);
+            }
+
             Mage::dispatchEvent('sales_quote_remove_item', array('quote_item' => $item));
         }
+
         return $this;
     }
 
@@ -676,7 +716,9 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
          * Proper solution is to submit items one by one with customer confirmation each time.
          */
         if ($item->isNominal() && $this->hasItems() || $this->hasNominalItems()) {
-            Mage::throwException(Mage::helper('sales')->__('Nominal item can be purchased standalone only. To proceed please remove other items from the quote.'));
+            Mage::throwException(
+                Mage::helper('sales')->__('Nominal item can be purchased standalone only. To proceed please remove other items from the quote.')
+            );
         }
 
         $item->setQuote($this);
@@ -688,16 +730,16 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
     }
 
     /**
-     * Add product to quote
+     * Advanced func to add product to quote - processing mode can be specified there.
+     * Returns error message if product type instance can't prepare product.
      *
-     * return error message if product type instance can't prepare product
-     *
-     * @param   mixed $product
-     * @return  Mage_Sales_Model_Quote_Item || string
+     * @param mixed $product
+     * @param null|float|Varien_Object $request
+     * @param null|string $processMode
+     * @return Mage_Sales_Model_Quote_Item|string
      */
-    public function addProduct(Mage_Catalog_Model_Product $product, $request=null)
+    public function addProductAdvanced(Mage_Catalog_Model_Product $product, $request = null, $processMode = null)
     {
-
         if ($request === null) {
             $request = 1;
         }
@@ -709,12 +751,11 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
         }
 
         $cartCandidates = $product->getTypeInstance(true)
-            ->prepareForCart($request, $product);
+            ->prepareForCartAdvanced($request, $product, $processMode);
 
         /**
          * Error message
          */
-
         if (is_string($cartCandidates)) {
             return $cartCandidates;
         }
@@ -726,13 +767,13 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
             $cartCandidates = array($cartCandidates);
         }
 
-
-
-
         $parentItem = null;
         $errors = array();
         $items = array();
         foreach ($cartCandidates as $candidate) {
+            // Child items can be sticked together only within their parent
+            $stickWithinParent = $candidate->getParentProductId() ? $parentItem : null;
+            $candidate->setStickWithinParent($stickWithinParent);
             $item = $this->_addCatalogProduct($candidate, $candidate->getCartQty());
             $items[] = $item;
 
@@ -742,7 +783,7 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
             if (!$parentItem) {
                 $parentItem = $item;
             }
-            if ($parentItem && $candidate->getParentProductId()) {
+            if ($parentItem && $candidate->getParentProductId() && !$item->getId()) {
                 $item->setParentItem($parentItem);
             }
 
@@ -765,6 +806,25 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
         return $item;
     }
 
+
+    /**
+     * Add product to quote
+     *
+     * return error message if product type instance can't prepare product
+     *
+     * @param mixed $product
+     * @param null|float|Varien_Object $request
+     * @return Mage_Sales_Model_Quote_Item|string
+     */
+    public function addProduct(Mage_Catalog_Model_Product $product, $request = null)
+    {
+        return $this->addProductAdvanced(
+            $product,
+            $request,
+            Mage_Catalog_Model_Product_Type_Abstract::PROCESS_MODE_FULL
+        );
+    }
+
     /**
      * Adding catalog product object data to quote
      *
@@ -773,6 +833,7 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
      */
     protected function _addCatalogProduct(Mage_Catalog_Model_Product $product, $qty = 1)
     {
+        $newItem = false;
         $item = $this->getItemByProduct($product);
         if (!$item) {
             $item = Mage::getModel('sales/quote_item');
@@ -783,6 +844,7 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
             else {
                 $item->setStoreId(Mage::app()->getStore()->getId());
             }
+            $newItem = true;
         }
 
         /**
@@ -795,16 +857,96 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
         $item->setOptions($product->getCustomOptions())
             ->setProduct($product);
 
-
-        $this->addItem($item);
+        // Add only item that is not in quote already (there can be other new or already saved item
+        if ($newItem) {
+            $this->addItem($item);
+        }
 
         return $item;
     }
 
     /**
+     * Updates quote item with new configuration
+     *
+     * $params sets how current item configuration must be taken into account and additional options.
+     * It's passed to Mage_Catalog_Helper_Product->addParamsToBuyRequest() to compose resulting buyRequest.
+     *
+     * Basically it can hold
+     * - 'current_config', Varien_Object or array - current buyRequest that configures product in this item,
+     *   used to restore currently attached files
+     * - 'files_prefix': string[a-z0-9_] - prefix that was added at frontend to names of file options (file inputs), so they won't
+     *   intersect with other submitted options
+     *
+     * For more options see Mage_Catalog_Helper_Product->addParamsToBuyRequest()
+     *
+     * @param int $itemId
+     * @param Varien_Object $buyRequest
+     * @param null|array|Varien_Object $params
+     * @return Mage_Sales_Model_Quote_Item
+     *
+     * @see Mage_Catalog_Helper_Product::addParamsToBuyRequest()
+     */
+    public function updateItem($itemId, $buyRequest, $params = null)
+    {
+        $item = $this->getItemById($itemId);
+        if (!$item) {
+            Mage::throwException(Mage::helper('sales')->__('Wrong quote item id to update configuration.'));
+        }
+        $productId = $item->getProduct()->getId();
+
+        //We need to create new clear product instance with same $productId
+        //to set new option values from $buyRequest
+        $product = Mage::getModel('catalog/product')
+            ->setStoreId($this->getStore()->getId())
+            ->load($productId);
+
+        if (!$params) {
+            $params = new Varien_Object();
+        } else if (is_array($params)) {
+            $params = new Varien_Object($params);
+        }
+        $params->setCurrentConfig($item->getBuyRequest());
+        $buyRequest = Mage::helper('catalog/product')->addParamsToBuyRequest($buyRequest, $params);
+
+        $resultItem = $this->addProduct($product, $buyRequest);
+
+        if (is_string($resultItem)) {
+            Mage::throwException($resultItem);
+        }
+
+        if ($resultItem->getParentItem()) {
+            $resultItem = $resultItem->getParentItem();
+        }
+
+        if ($resultItem->getId() != $itemId) {
+            /*
+             * Product configuration didn't stick to original quote item
+             * It either has same configuration as some other quote item's product or completely new configuration
+             */
+            $this->removeItem($itemId);
+
+            $items = $this->getAllItems();
+            foreach ($items as $item) {
+                if (($item->getProductId() == $productId) && ($item->getId() != $resultItem->getId())) {
+                    if ($resultItem->compare($item)) {
+                        // Product configuration is same as in other quote item
+                        $resultItem->setQty($resultItem->getQty() + $item->getQty());
+                        $this->removeItem($item->getId());
+                        break;
+                    }
+                }
+            }
+        } else {
+            $resultItem->setQty($buyRequest->getQty());
+        }
+
+        return $resultItem;
+    }
+
+    /**
      * Retrieve quote item by product id
      *
-     * @param   int $productId
+     * @param   Mage_Catalog_Model_Product $product
      * @return  Mage_Sales_Model_Quote_Item || false
      */
     public function getItemByProduct($product)
@@ -971,14 +1113,18 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
 
             $address->collectTotals();
 
-            $this->setSubtotal((float) $this->getSubtotal()+$address->getSubtotal());
-            $this->setBaseSubtotal((float) $this->getBaseSubtotal()+$address->getBaseSubtotal());
+            $this->setSubtotal((float) $this->getSubtotal() + $address->getSubtotal());
+            $this->setBaseSubtotal((float) $this->getBaseSubtotal() + $address->getBaseSubtotal());
 
-            $this->setSubtotalWithDiscount((float) $this->getSubtotalWithDiscount()+$address->getSubtotalWithDiscount());
-            $this->setBaseSubtotalWithDiscount((float) $this->getBaseSubtotalWithDiscount()+$address->getBaseSubtotalWithDiscount());
+            $this->setSubtotalWithDiscount(
+                (float) $this->getSubtotalWithDiscount() + $address->getSubtotalWithDiscount()
+            );
+            $this->setBaseSubtotalWithDiscount(
+                (float) $this->getBaseSubtotalWithDiscount() + $address->getBaseSubtotalWithDiscount()
+            );
 
-            $this->setGrandTotal((float) $this->getGrandTotal()+$address->getGrandTotal());
-            $this->setBaseGrandTotal((float) $this->getBaseGrandTotal()+$address->getBaseGrandTotal());
+            $this->setGrandTotal((float) $this->getGrandTotal() + $address->getGrandTotal());
+            $this->setBaseGrandTotal((float) $this->getBaseGrandTotal() + $address->getBaseGrandTotal());
         }
 
         Mage::helper('sales')->checkQuoteAmount($this, $this->getGrandTotal());
@@ -993,7 +1139,8 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
                 continue;
             }
 
-            if (($children = $item->getChildren()) && $item->isShipSeparately()) {
+            $children = $item->getChildren();
+            if ($children && $item->isShipSeparately()) {
                 foreach ($children as $child) {
                     if ($child->getProduct()->getIsVirtual()) {
                         $this->setVirtualItemsQty($this->getVirtualItemsQty() + $child->getQty()*$item->getQty());
@@ -1013,9 +1160,7 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
 
         Mage::dispatchEvent(
             $this->_eventPrefix . '_collect_totals_after',
-            array(
-                $this->_eventObject=>$this
-            )
+            array($this->_eventObject => $this)
         );
 
         $this->setTotalsCollectedFlag(true);
@@ -1123,18 +1268,19 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
             return true;
         }
 
-        if ($multishipping && !$minOrderMulti) {
-            $baseTotal = 0;
-            foreach ($this->getAllAddresses() as $address) {
-                /* @var $address Mage_Sales_Model_Quote_Address */
-                $baseTotal += $address->getBaseSubtotalWithDiscount();
-            }
+        if ($multishipping) {
+            if ($minOrderMulti) {
+                $baseTotal = 0;
+                foreach ($this->getAllAddresses() as $address) {
+                    /* @var $address Mage_Sales_Model_Quote_Address */
+                    $baseTotal += $address->getBaseSubtotalWithDiscount();
+                }
 
-            if ($baseTotal < Mage::getStoreConfig('sales/minimum_order/amount', $storeId)) {
-                return false;
+                if ($baseTotal < Mage::getStoreConfig('sales/minimum_order/amount', $storeId)) {
+                    return false;
+                }
             }
-        }
-        else {
+        } else {
             foreach ($this->getAllAddresses() as $address) {
                 /* @var $address Mage_Sales_Model_Quote_Address */
                 if (!$address->validateMinimumAmount()) {
@@ -1325,7 +1471,8 @@ class Mage_Sales_Model_Quote extends Mage_Core_Model_Abstract
         foreach ($this->getAllVisibleItems() as $item) {
             $product = $item->getProduct();
             if (is_object($product) && ($product->isRecurring())
-                && $profile = Mage::getModel('sales/recurring_profile')->importProduct($product)) {
+                && $profile = Mage::getModel('sales/recurring_profile')->importProduct($product)
+            ) {
                 $profile->importQuote($this);
                 $profile->importQuoteItem($item);
                 $result[] = $profile;

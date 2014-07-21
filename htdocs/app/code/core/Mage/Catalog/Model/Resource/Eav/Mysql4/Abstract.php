@@ -68,6 +68,30 @@ abstract class Mage_Catalog_Model_Resource_Eav_Mysql4_Abstract extends Mage_Eav_
     }
 
     /**
+     * Check whether attribute instance (attribute, backend, frontend or source) has method and applicable
+     *
+     * @param Mage_Eav_Model_Entity_Attribute_Abstract|Mage_Eav_Model_Entity_Attribute_Backend_Abstract|Mage_Eav_Model_Entity_Attribute_Frontend_Abstract|Mage_Eav_Model_Entity_Attribute_Source_Abstract $instance
+     * @param string $method
+     * @param array $args array of arguments
+     * @return boolean
+     */
+    protected function _isCallableAttributeInstance($instance, $method, $args)
+    {
+        if ($instance instanceof Mage_Eav_Model_Entity_Attribute_Backend_Abstract
+            && ($method == 'beforeSave' || $method = 'afterSave')
+        ) {
+            $attributeCode = $instance->getAttribute()->getAttributeCode();
+            if (isset($args[0]) && $args[0] instanceof Varien_Object && $args[0]->getData($attributeCode) === false) {
+                return false;
+            }
+        }
+
+        return parent::_isCallableAttributeInstance($instance, $method, $args);
+    }
+
+
+
+    /**
      * Retrieve select object for loading entity attributes values
      *
      * Join attribute store value
@@ -140,7 +164,10 @@ abstract class Mage_Catalog_Model_Resource_Eav_Mysql4_Abstract extends Mage_Eav_
                     $object->setAttributeDefaultValue($attributeCode, $valueRow['value']);
                 }
                 else {
-                    $object->setAttributeDefaultValue($attributeCode, $this->_attributes[$valueRow['attribute_id']]['value']);
+                    $object->setAttributeDefaultValue(
+                        $attributeCode,
+                        $this->_attributes[$valueRow['attribute_id']]['value']
+                    );
                 }
             }
             else {
@@ -242,7 +269,7 @@ abstract class Mage_Catalog_Model_Resource_Eav_Mysql4_Abstract extends Mage_Eav_
                 'entity_id'         => $object->getEntityId(),
                 'value'             => $this->_prepareValueForSave($value, $attribute)
             );
-            $this->_getWriteAdapter()->insertOnDuplicate($attribute->getBackend()->getTable(), $bind, array('value'));
+            $this->_getWriteAdapter()->select()->insertIgnoreFromSelect($attribute->getBackend()->getTable(), $bind);
         }
         return $this->_saveAttributeValue($object, $attribute, $value);
 
@@ -306,7 +333,10 @@ abstract class Mage_Catalog_Model_Resource_Eav_Mysql4_Abstract extends Mage_Eav_
 //                $attribute->getBackend()->getTable(),
 //                $this->_getWriteAdapter()->quoteInto('attribute_id=?', $attribute->getId()) .
 //                $this->_getWriteAdapter()->quoteInto(' AND entity_id=?', $object->getId()) .
-//                $this->_getWriteAdapter()->quoteInto(' AND store_id!=?', Mage_Catalog_Model_Abstract::DEFAULT_STORE_ID)
+//                $this->_getWriteAdapter()->quoteInto(
+//                    ' AND store_id!=?',
+//                    Mage_Catalog_Model_Abstract::DEFAULT_STORE_ID
+//                )
 //            );
 //        }
 //
@@ -441,7 +471,7 @@ abstract class Mage_Catalog_Model_Resource_Eav_Mysql4_Abstract extends Mage_Eav_
             $delCondition = $condition
                 . $this->_getWriteAdapter()->quoteInto(' AND attribute_id IN(?)', $storeAttributes)
                 . $this->_getWriteAdapter()->quoteInto(' AND store_id =?', $object->getStoreId());
-            $this->_getWriteAdapter()->delete($table, $delCondition);;
+            $this->_getWriteAdapter()->delete($table, $delCondition);
         }
         return $this;
     }
@@ -522,6 +552,33 @@ abstract class Mage_Catalog_Model_Resource_Eav_Mysql4_Abstract extends Mage_Eav_
     protected function _isAttributeValueEmpty(Mage_Eav_Model_Entity_Attribute_Abstract $attribute, $value)
     {
         return $value === false;
+    }
+
+    /**
+     * Return if attribute exists in original data array.
+     * Checks also attribute's store scope:
+     * We should insert on duplicate key update values if we unchecked 'STORE VIEW' checkbox in store view.
+     *
+     * @param Mage_Eav_Model_Entity_Attribute_Abstract $attribute
+     * @param mixed $value New value of the attribute.
+     * @param array $origData
+     * @return bool
+     */
+    protected function _canUpdateAttribute(
+        Mage_Eav_Model_Entity_Attribute_Abstract $attribute,
+        $value,
+        array &$origData)
+    {
+        $result = parent::_canUpdateAttribute($attribute, $value, $origData);
+        if ($result &&
+            ($attribute->isScopeStore() || $attribute->isScopeWebsite()) &&
+            !$this->_isAttributeValueEmpty($attribute, $value) &&
+            $value == $origData[$attribute->getAttributeCode()] &&
+            isset($origData['store_id']) && $origData['store_id'] != $this->getDefaultStoreId()
+        ) {
+            return false;
+        }
+        return $result;
     }
 
     /**
@@ -610,14 +667,23 @@ abstract class Mage_Catalog_Model_Resource_Eav_Mysql4_Abstract extends Mage_Eav_
                     ->where('default_value.entity_id = ? ', $entityId)
                     ->where('default_value.store_id = 0');
 
-                $joinCondition = $this->_getReadAdapter()->quoteInto('store_value.attribute_id IN (?)', array_keys($_attributes));
-                $joinCondition .= ' AND ' . $this->_getReadAdapter()->quoteInto('store_value.entity_type_id = ?', $this->getTypeId());
+                $joinCondition = $this->_getReadAdapter()->quoteInto(
+                    'store_value.attribute_id IN (?)',
+                    array_keys($_attributes)
+                );
+                $joinCondition .= ' AND ' . $this->_getReadAdapter()->quoteInto(
+                    'store_value.entity_type_id = ?',
+                    $this->getTypeId()
+                );
                 $joinCondition .= ' AND ' . $this->_getReadAdapter()->quoteInto('store_value.entity_id = ?', $entityId);
                 $joinCondition .= ' AND ' . $this->_getReadAdapter()->quoteInto('store_value.store_id = ?', $store);
 
                 $select->joinLeft(array('store_value' => $table),
                     $joinCondition,
-                    array('attr_value' => 'IFNULL(store_value.value, default_value.value)', 'default_value.attribute_id')
+                    array(
+                        'attr_value' => 'IFNULL(store_value.value, default_value.value)',
+                        'default_value.attribute_id'
+                    )
                 );
                 $result = $this->_getReadAdapter()->fetchAll($select);
                 foreach ($result as $key => $_attribute) {

@@ -77,6 +77,46 @@ class Mage_Adminhtml_Block_Customer_Edit_Tab_Account extends Mage_Adminhtml_Bloc
 //            $customer->setWebsiteId(Mage::app()->getStore(true)->getWebsiteId());
 //        }
 
+        $customerStoreId = null;
+        if ($customer->getId()) {
+            $customerStoreId = Mage::app()->getWebsite($customer->getWebsiteId())->getDefaultStore()->getId();
+        }
+
+        $prefixElement = $form->getElement('prefix');
+        if ($prefixElement) {
+            $prefixOptions = $this->helper('customer')->getNamePrefixOptions($customerStoreId);
+            if (!empty($prefixOptions)) {
+                $fieldset->removeField($prefixElement->getId());
+                $prefixField = $fieldset->addField($prefixElement->getId(),
+                    'select',
+                    $prefixElement->getData(),
+                    $form->getElement('group_id')->getId()
+                );
+                $prefixField->setValues($prefixOptions);
+                if ($customer->getId()) {
+                    $prefixField->addElementValues($customer->getPrefix());
+                }
+
+            }
+        }
+
+        $suffixElement = $form->getElement('suffix');
+        if ($suffixElement) {
+            $suffixOptions = $this->helper('customer')->getNameSuffixOptions($customerStoreId);
+            if (!empty($suffixOptions)) {
+                $fieldset->removeField($suffixElement->getId());
+                $suffixField = $fieldset->addField($suffixElement->getId(),
+                    'select',
+                    $suffixElement->getData(),
+                    $form->getElement('lastname')->getId()
+                );
+                $suffixField->setValues($suffixOptions);
+                if ($customer->getId()) {
+                    $suffixField->addElementValues($customer->getSuffix());
+                }
+            }
+        }
+
         if ($customer->getId()) {
             if (!$customer->isReadonly()) {
                 // add password management fieldset
@@ -114,6 +154,7 @@ class Mage_Adminhtml_Block_Customer_Edit_Tab_Account extends Mage_Adminhtml_Bloc
                             'name'  => 'sendemail',
                             'label' => Mage::helper('customer')->__('Send Welcome Email after Confirmation')
                         ));
+                        $customer->setData('sendemail', '1');
                     }
                 }
             }
@@ -138,6 +179,7 @@ class Mage_Adminhtml_Block_Customer_Edit_Tab_Account extends Mage_Adminhtml_Bloc
                 'name'  => 'sendemail',
                 'id'    => 'sendemail',
             ));
+            $customer->setData('sendemail', '1');
             if (!Mage::app()->isSingleStoreMode()) {
                 $fieldset->addField('sendemail_store_id', 'select', array(
                     'label' => $this->helper('customer')->__('Send From'),
@@ -148,16 +190,23 @@ class Mage_Adminhtml_Block_Customer_Edit_Tab_Account extends Mage_Adminhtml_Bloc
         }
 
         // make sendemail and sendmail_store_id disabled, if website_id has empty value
-        $sendEmail = $form->getElement('sendemail_store_id');
+        $isSingleMode = Mage::app()->isSingleStoreMode();
+        $sendEmailId = $isSingleMode ? 'sendemail' : 'sendemail_store_id';
+        $sendEmail = $form->getElement($sendEmailId);
+
+        $prefix = $form->getHtmlIdPrefix();
         if ($sendEmail) {
-            $prefix = $form->getHtmlIdPrefix();
+            $_disableStoreField = '';
+            if (!$isSingleMode) {
+                $_disableStoreField = "$('{$prefix}sendemail_store_id').disabled=(''==this.value || '0'==this.value);";
+            }
             $sendEmail->setAfterElementHtml(
                 '<script type="text/javascript">'
                 . "
                 $('{$prefix}website_id').disableSendemail = function() {
-                    $('{$prefix}sendemail').disabled = ('' == this.value || '0' == this.value);
-                    $('{$prefix}sendemail_store_id').disabled = ('' == this.value || '0' == this.value);
-                }.bind($('{$prefix}website_id'));
+                    $('{$prefix}sendemail').disabled = ('' == this.value || '0' == this.value);".
+                    $_disableStoreField
+                ."}.bind($('{$prefix}website_id'));
                 Event.observe('{$prefix}website_id', 'change', $('{$prefix}website_id').disableSendemail);
                 $('{$prefix}website_id').disableSendemail();
                 "

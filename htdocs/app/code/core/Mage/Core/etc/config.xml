@@ -28,7 +28,7 @@
 <config>
     <modules>
         <Mage_Core>
-             <version>0.8.27</version>
+             <version>0.8.28</version>
         </Mage_Core>
     </modules>
 
@@ -54,6 +54,8 @@
                     <convert_history><table>core_convert_history</table></convert_history>
                     <design_change><table>design_change</table></design_change>
                     <flag><table>core_flag</table></flag>
+                    <file_storage><table>core_file_storage</table></file_storage>
+                    <directory_storage><table>core_directory_storage</table></directory_storage>
                 </entities>
             </core_mysql4>
         </models>
@@ -164,6 +166,22 @@
                     </variable_observer>
                 </observers>
             </cms_wysiwyg_config_prepare>
+            <controller_action_predispatch_adminhtml>
+                <observers>
+                    <synchronize_notification>
+                        <class>core/observer</class>
+                        <method>addSynchronizeNotification</method>
+                    </synchronize_notification>
+                </observers>
+            </controller_action_predispatch_adminhtml>
+            <show_synchronize_message>
+                <observers>
+                    <synchronize_notification>
+                        <class>core/observer</class>
+                        <method>addSynchronizeNotification</method>
+                    </synchronize_notification>
+                </observers>
+            </show_synchronize_message>
         </events>
     </adminhtml>
     <install>
@@ -203,6 +221,9 @@
             <translate_inline>
                 <active>0</active>
                 <active_admin>0</active_admin>
+                <invalid_caches>
+                    <block_html/>
+                </invalid_caches>
             </translate_inline>
             <log>
                 <active>0</active>
@@ -221,6 +242,16 @@
                 <host>localhost</host>
                 <port>25</port>
             </smtp>
+
+            <media_storage_configuration>
+                <media_storage>0</media_storage>
+                <media_database>default_setup</media_database>
+                <configuration_update_time>3600</configuration_update_time>
+                <allowed_resources>
+                    <compiled_css_folder>css</compiled_css_folder>
+                    <compiled_js_folder>js</compiled_js_folder>
+                </allowed_resources>
+            </media_storage_configuration>
         </system>
 
         <trans_email>
@@ -300,7 +331,6 @@
                 <cookies>1</cookies>
                 <javascript>1</javascript>
             </browser_capabilities>
-
         </web>
 
         <admin>
@@ -321,6 +351,39 @@
                 <firstday>0</firstday>
                 <weekend>0,6</weekend>
             </locale>
+            <file>
+                <protected_extensions>
+                    <!-- PHP script file extension -->
+                    <php>php</php>
+                    <!-- File extension of configuration of an Apache Web server -->
+                    <htaccess>htaccess</htaccess>
+                    <!-- Java script file extension -->
+                    <jsp>jsp</jsp>
+                    <!-- Perl script file extension -->
+                    <pl>pl</pl>
+                    <!-- Python script file extension -->
+                    <py>py</py>
+                    <!-- Active Server Page script file extension -->
+                    <asp>asp</asp>
+                    <!-- UNIX command prompt file extension -->
+                    <sh>sh</sh>
+                    <!-- Common Gateway Interface script extension type -->
+                    <cgi>cgi</cgi>
+                    <!-- BOF HTML file extensions -->
+                    <htm>htm</htm>
+                    <html>html</html>
+                    <phtml>phtml</phtml>
+                    <shtml>shtml</shtml>
+                    <!-- EOF HTML file extensions -->
+                </protected_extensions>
+
+                <!-- Valid Paths to make public files -->
+                <public_files_valid_paths>
+                    <protected>
+                        <app>/app/*/*</app>
+                    </protected>
+                </public_files_valid_paths>
+            </file>
         </general>
     </default>
     <stores> <!-- declare routers for installation process -->

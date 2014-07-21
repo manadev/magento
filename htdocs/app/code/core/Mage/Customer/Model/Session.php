@@ -176,11 +176,13 @@ class Mage_Customer_Model_Session extends Mage_Core_Model_Session_Abstract
      */
     public function login($username, $password)
     {
+        /** @var $customer Mage_Customer_Model_Customer */
         $customer = Mage::getModel('customer/customer')
             ->setWebsiteId(Mage::app()->getStore()->getWebsiteId());
 
         if ($customer->authenticate($username, $password)) {
             $this->setCustomerAsLoggedIn($customer);
+            $this->renewSession();
             return true;
         }
         return false;
@@ -219,6 +221,7 @@ class Mage_Customer_Model_Session extends Mage_Core_Model_Session_Abstract
         if ($this->isLoggedIn()) {
             Mage::dispatchEvent('customer_logout', array('customer' => $this->getCustomer()) );
             $this->setId(null);
+            $this->getCookie()->delete($this->getSessionName());
         }
         return $this;
     }

@@ -63,7 +63,7 @@ class Mage_Adminhtml_Tax_RateController extends Mage_Adminhtml_Controller_Action
     {
         $rateModel = Mage::getSingleton('tax/calculation_rate')
             ->load(null);
-        
+
         $this->_title($this->__('Sales'))
              ->_title($this->__('Tax'))
              ->_title($this->__('Manage Tax Zones and Rates'));
@@ -72,7 +72,7 @@ class Mage_Adminhtml_Tax_RateController extends Mage_Adminhtml_Controller_Action
 
         //This line substitutes in the form the previously entered by the user values, if any of them were wrong.
         $rateModel->setData(Mage::getSingleton('adminhtml/session')->getFormData(true));
-        
+
         $this->_initAction()
             ->_addBreadcrumb(Mage::helper('tax')->__('Manage Tax Rates'), Mage::helper('tax')->__('Manage Tax Rates'), $this->getUrl('*/tax_rate'))
             ->_addBreadcrumb(Mage::helper('tax')->__('New Tax Rate'), Mage::helper('tax')->__('New Tax Rate'))
@@ -93,6 +93,13 @@ class Mage_Adminhtml_Tax_RateController extends Mage_Adminhtml_Controller_Action
     {
         $ratePost = $this->getRequest()->getPost();
         if ($ratePost) {
+            //filter tags in titles
+            /** @var $helper Mage_Adminhtml_Helper_Data */
+            $helper = Mage::helper('adminhtml');
+            $ratePost['code'] = $helper->stripTags($ratePost['code']);
+            foreach ($ratePost['title'] as &$title) {
+                $title = $helper->stripTags($title);
+            }
 
             $rateId = $this->getRequest()->getParam('tax_calculation_rate_id');
             if ($rateId) {
@@ -110,13 +117,11 @@ class Mage_Adminhtml_Tax_RateController extends Mage_Adminhtml_Controller_Action
                 Mage::getSingleton('adminhtml/session')->addSuccess(Mage::helper('tax')->__('The tax rate has been saved.'));
                 $this->getResponse()->setRedirect($this->getUrl("*/*/"));
                 return true;
-            }
-            catch (Mage_Core_Exception $e) {
+            } catch (Mage_Core_Exception $e) {
                 //save entered by the user values in session, for re-rendering of form.
                 Mage::getSingleton('adminhtml/session')->setFormData($ratePost);
                 Mage::getSingleton('adminhtml/session')->addError($e->getMessage());
-            }
-            catch (Exception $e) {
+            } catch (Exception $e) {
                 //Mage::getSingleton('adminhtml/session')->addError(Mage::helper('tax')->__('An error occurred while saving this rate.'));
                 Mage::getSingleton('adminhtml/session')->addError($e->getMessage());
             }
@@ -261,11 +266,9 @@ class Mage_Adminhtml_Tax_RateController extends Mage_Adminhtml_Controller_Action
                 $this->_importRates();
 
                 Mage::getSingleton('adminhtml/session')->addSuccess(Mage::helper('tax')->__('The tax rate has been imported.'));
-            }
-            catch (Mage_Core_Exception $e) {
+            } catch (Mage_Core_Exception $e) {
                 Mage::getSingleton('adminhtml/session')->addError($e->getMessage());
-            }
-            catch (Exception $e) {
+            } catch (Exception $e) {
                 Mage::getSingleton('adminhtml/session')->addError(Mage::helper('tax')->__('Invalid file upload attempt'));
             }
         }
@@ -294,7 +297,7 @@ class Mage_Adminhtml_Tax_RateController extends Mage_Adminhtml_Controller_Action
         $stores = array();
         $unset = array();
         $storeCollection = Mage::getModel('core/store')->getCollection()->setLoadDefault(false);
-        for ($i=5; $i<count($csvData[0]); $i++) {
+        for ($i = 5; $i < count($csvData[0]); $i++) {
             $header = $csvData[0][$i];
             $found = false;
             foreach ($storeCollection as $store) {
@@ -318,6 +321,9 @@ class Mage_Adminhtml_Tax_RateController extends Mage_Adminhtml_Controller_Action
             }
         }
         if ($csvData[0] == $csvFields) {
+            /** @var $helper Mage_Adminhtml_Helper_Data */
+            $helper = Mage::helper('adminhtml');
+
             foreach ($csvData as $k => $v) {
                 if ($k == 0) {
                     continue;
@@ -356,11 +362,11 @@ class Mage_Adminhtml_Tax_RateController extends Mage_Adminhtml_Controller_Action
 
                 if (!empty($regions[$v[1]][$v[2]])) {
                     $rateData  = array(
-                        'code'=>$v[0],
+                        'code'           => $helper->stripTags($v[0]),
                         'tax_country_id' => $v[1],
-                        'tax_region_id' => ($regions[$v[1]][$v[2]] == '*') ? 0 : $regions[$v[1]][$v[2]],
-                        'tax_postcode'  => (empty($v[3]) || $v[3]=='*') ? null : $v[3],
-                        'rate'=>$v[4],
+                        'tax_region_id'  => ($regions[$v[1]][$v[2]] == '*') ? 0 : $regions[$v[1]][$v[2]],
+                        'tax_postcode'   => (empty($v[3]) || $v[3]=='*') ? null : $v[3],
+                        'rate'           => $v[4],
                     );
 
                     $rateModel = Mage::getModel('tax/calculation_rate')->loadByCode($rateData['code']);
@@ -370,14 +376,19 @@ class Mage_Adminhtml_Tax_RateController extends Mage_Adminhtml_Controller_Action
 
                     $titles = array();
                     foreach ($stores as $field=>$id) {
-                        $titles[$id]=$v[$field];
+                        $titles[$id] = $v[$field];
                     }
+
+                    //filter tags in titles
+                    foreach ($titles as &$title) {
+                        $title = $helper->stripTags($title);
+                    }
+
                     $rateModel->setTitle($titles);
                     $rateModel->save();
                 }
             }
-        }
-        else {
+        } else {
             Mage::throwException(Mage::helper('tax')->__('Invalid file format upload attempt'));
         }
     }
@@ -388,15 +399,19 @@ class Mage_Adminhtml_Tax_RateController extends Mage_Adminhtml_Controller_Action
      */
     public function exportPostAction()
     {
+        /** start csv content and set template */
+        $headers = new Varien_Object(array(
+            'code'         => Mage::helper('tax')->__('Code'),
+            'country_name' => Mage::helper('tax')->__('Country'),
+            'region_name'  => Mage::helper('tax')->__('State'),
+            'tax_postcode' => Mage::helper('tax')->__('Zip/Post Code'),
+            'rate'         => Mage::helper('tax')->__('Rate')
+        ));
+        $template = '"{{code}}","{{country_name}}","{{region_name}}","{{tax_postcode}}","{{rate}}"';
+        $content = $headers->toString($template);
+
         $storeTaxTitleTemplate       = array();
         $taxCalculationRateTitleDict = array();
-
-        /** start csv content and set template */
-        $content = '"'.Mage::helper('tax')->__('Code') . '","' . Mage::helper('tax')->__('Country') . '","'
-                 . Mage::helper('tax')->__('State') . '","' . Mage::helper('tax')->__('Zip/Post Code') . '","'
-                 . Mage::helper('tax')->__('Rate') . '"';
-
-        $template = '"{{code}}","{{country_name}}","{{region_name}}","{{tax_postcode}}","{{rate}}"';
 
         foreach (Mage::getModel('core/store')->getCollection()->setLoadDefault(false) as $store) {
             $storeTitle = 'title_' . $store->getId();
@@ -404,6 +419,7 @@ class Mage_Adminhtml_Tax_RateController extends Mage_Adminhtml_Controller_Action
             $template  .= ',"{{' . $storeTitle . '}}"';
             $storeTaxTitleTemplate[$storeTitle] = null;
         }
+        unset($store);
 
         $content .= "\n";
 
@@ -416,8 +432,13 @@ class Mage_Adminhtml_Tax_RateController extends Mage_Adminhtml_Controller_Action
 
             $taxCalculationRateTitleDict[$rateId]['title_' . $title->getStoreId()] = $title->getValue();
         }
+        unset($title);
 
-        foreach (Mage::getModel('tax/calculation_rate')->getCollection()->joinCountryTable()->joinRegionTable() as $rate) {
+        $collection = Mage::getResourceModel('tax/calculation_rate_collection')
+            ->joinCountryTable()
+            ->joinRegionTable();
+
+        while ($rate = $collection->fetchItem()) {
             if ($rate->getTaxRegionId() == 0) {
                 $rate->setRegionName('*');
             }

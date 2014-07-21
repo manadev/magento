@@ -23,11 +23,13 @@
  * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
  */
+/** @var $this Mage_Adminhtml_Block_Sales_Order_Totals_Tax */
 ?>
 <?php
-    $_source    = $this->getSource();
-    $_order     = $this->getOrder();
-    $_fullInfo  = $this->getFullTaxInfo();
+/** @var $_source Mage_Sales_Model_Order_Invoice */
+$_source    = $this->getSource();
+$_order     = $this->getOrder();
+$_fullInfo  = $this->getFullTaxInfo();
 ?>
 
 <?php if ($this->displayFullSummary()): ?>
@@ -44,8 +46,8 @@
 
         <?php foreach ($rates as $rate): ?>
         <tr class="summary-details<?php if ($isTop): echo ' summary-details-first'; endif; ?>" style="display:none;">
-            <?php if ($rate['percent']): ?>
-                <td class="label"><?php echo $rate['title']; ?> (<?php echo $rate['percent']; ?>%)<br /></td>
+            <?php if (!is_null($rate['percent'])): ?>
+                <td class="label"><?php echo $rate['title']; ?> (<?php echo (float)$rate['percent']; ?>%)<br /></td>
             <?php else: ?>
                 <td class="label"><?php echo $rate['title']; ?><br /></td>
             <?php endif; ?>

@@ -56,7 +56,7 @@ class Mage_Customer_Model_Attribute_Data_Select extends Mage_Customer_Model_Attr
     {
         $errors     = array();
         $attribute  = $this->getAttribute();
-        $label      = $attribute->getStoreLabel();
+        $label      = Mage::helper('customer')->__($attribute->getStoreLabel());
 
         if ($value === false) {
             // try to load original value and validate it
@@ -125,6 +125,7 @@ class Mage_Customer_Model_Attribute_Data_Select extends Mage_Customer_Model_Attr
         switch ($format) {
             case Mage_Customer_Model_Attribute_Data::OUTPUT_FORMAT_JSON:
                 $output = $value;
+                break;
             default:
                 if ($value != '') {
                     $output = $this->_getOptionText($value);

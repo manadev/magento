@@ -38,15 +38,12 @@ class Mage_Payment_Helper_Data extends Mage_Core_Helper_Abstract
      * Retrieve method model object
      *
      * @param   string $code
-     * @return  Mage_Payment_Model_Method_Abstract
+     * @return  Mage_Payment_Model_Method_Abstract|false
      */
     public function getMethodInstance($code)
     {
         $key = self::XML_PATH_PAYMENT_METHODS.'/'.$code.'/model';
         $class = Mage::getStoreConfig($key);
-        if (!$class) {
-            Mage::throwException($this->__('Cannot load configuration for payment method "%s"', $code));
-        }
         return Mage::getModel($class);
     }
 
@@ -160,7 +157,7 @@ class Mage_Payment_Helper_Data extends Mage_Core_Helper_Abstract
         $result = array();
         foreach ($this->getPaymentMethods($store) as $code => $data) {
             $method = $this->getMethodInstance($code);
-            if ($method->canManageRecurringProfiles()) {
+            if ($method && $method->canManageRecurringProfiles()) {
                 $result[] = $method;
             }
         }
@@ -209,7 +206,9 @@ class Mage_Payment_Helper_Data extends Mage_Core_Helper_Abstract
             if ((isset($data['title']))) {
                 $methods[$code] = $data['title'];
             } else {
-                $methods[$code] = $this->getMethodInstance($code)->getConfigData('title', $store);
+                if ($this->getMethodInstance($code)) {
+                    $methods[$code] = $this->getMethodInstance($code)->getConfigData('title', $store);
+                }
             }
             if ($asLabelValue && $withGroups && isset($data['group'])) {
                 $groupRelations[$code] = $data['group'];
@@ -264,5 +263,38 @@ class Mage_Payment_Helper_Data extends Mage_Core_Helper_Abstract
             }
         }
         return $result;
+    }
+
+    /**
+     * Returns value of Zero Subtotal Checkout / Enabled
+     *
+     * @param mixed $store
+     * @return boolean
+     */
+    public function isZeroSubTotal($store = null)
+    {
+        return Mage::getStoreConfig(Mage_Payment_Model_Method_Free::XML_PATH_PAYMENT_FREE_ACTIVE, $store);
+    }
+
+    /**
+     * Returns value of Zero Subtotal Checkout / New Order Status
+     *
+     * @param mixed $store
+     * @return string
+     */
+    public function getZeroSubTotalOrderStatus($store = null)
+    {
+        return Mage::getStoreConfig(Mage_Payment_Model_Method_Free::XML_PATH_PAYMENT_FREE_ORDER_STATUS, $store);
+    }
+
+    /**
+     * Returns value of Zero Subtotal Checkout / Automatically Invoice All Items
+     *
+     * @param mixed $store
+     * @return string
+     */
+    public function getZeroSubTotalPaymentAutomaticInvoice($store = null)
+    {
+        return Mage::getStoreConfig(Mage_Payment_Model_Method_Free::XML_PATH_PAYMENT_FREE_PAYMENT_ACTION, $store);
     }
 }

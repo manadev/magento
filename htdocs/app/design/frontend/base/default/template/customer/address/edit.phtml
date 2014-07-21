@@ -45,7 +45,7 @@
         <h2 class="legend"><?php echo $this->__('Contact Information') ?></h2>
         <ul class="form-list">
             <li class="fields">
-                <?php echo $this->getLayout()->createBlock('customer/widget_name')->setObject($this->getAddress()->getFirstname() ? $this->getAddress() : $this->getCustomer())->toHtml() ?>
+                <?php echo $this->getNameBlockHtml() ?>
             </li>
             <li class="wide">
                 <label for="company"><?php echo $this->__('Company') ?></label>
@@ -103,7 +103,7 @@
                             $('region_id').setAttribute('defaultValue',  "<?php echo $this->getAddress()->getRegionId() ?>");
                         //]]>
                         </script>
-                        <input type="text" id="region" name="region" value="<?php echo $this->htmlEscape($this->getAddress()->getRegion()) ?>"  title="<?php echo $this->__('State/Province') ?>" class="input-text" style="display:none;" />
+                        <input type="text" id="region" name="region" value="<?php echo $this->htmlEscape($this->getAddress()->getRegion()) ?>"  title="<?php echo $this->__('State/Province') ?>" class="input-text" />
                     </div>
                 </div>
             </li>
