@@ -20,7 +20,7 @@
  *
  * @category    Mage
  * @package     Mage_Adminhtml
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -40,6 +40,9 @@ class Mage_Adminhtml_Sales_Order_CreateController extends Mage_Adminhtml_Control
     protected function _construct()
     {
         $this->setUsedModuleName('Mage_Sales');
+
+        // During order creation in the backend admin has ability to add any products to order
+        Mage::helper('catalog/product')->setSkipSaleableCheck(true);
     }
 
     /**
@@ -131,6 +134,14 @@ class Mage_Adminhtml_Sales_Order_CreateController extends Mage_Adminhtml_Control
      */
     protected function _processActionData($action = null)
     {
+        $eventData = array(
+            'order_create_model' => $this->_getOrderCreateModel(),
+            'request_model'      => $this->getRequest(),
+            'session'            => $this->_getSession(),
+        );
+
+        Mage::dispatchEvent('adminhtml_sales_order_create_process_data_before', $eventData);
+
         /**
          * Saving order data
          */
@@ -153,7 +164,13 @@ class Mage_Adminhtml_Sales_Order_CreateController extends Mage_Adminhtml_Control
          */
         if (!$this->_getOrderCreateModel()->getQuote()->isVirtual()) {
             $syncFlag = $this->getRequest()->getPost('shipping_as_billing');
-            if (!is_null($syncFlag)) {
+            $shippingMethod = $this->_getOrderCreateModel()->getShippingAddress()->getShippingMethod();
+            if (is_null($syncFlag)
+                && $this->_getOrderCreateModel()->getShippingAddress()->getSameAsBilling()
+                && empty($shippingMethod)
+            ) {
+                $this->_getOrderCreateModel()->setShippingAsBilling(1);
+            } else {
                 $this->_getOrderCreateModel()->setShippingAsBilling((int)$syncFlag);
             }
         }
@@ -168,7 +185,9 @@ class Mage_Adminhtml_Sales_Order_CreateController extends Mage_Adminhtml_Control
         /**
          * Collecting shipping rates
          */
-        if (!$this->_getOrderCreateModel()->getQuote()->isVirtual() && $this->getRequest()->getPost('collect_shipping_rates')) {
+        if (!$this->_getOrderCreateModel()->getQuote()->isVirtual() &&
+            $this->getRequest()->getPost('collect_shipping_rates')
+        ) {
             $this->_getOrderCreateModel()->collectShippingRates();
         }
 
@@ -257,7 +276,8 @@ class Mage_Adminhtml_Sales_Order_CreateController extends Mage_Adminhtml_Control
          * Importing gift message allow items from specific product grid
          */
         if ($data = $this->getRequest()->getPost('add_products')) {
-            $this->_getGiftmessageSaveModel()->importAllowQuoteItemsFromProducts(Mage::helper('core')->jsonDecode($data));
+            $this->_getGiftmessageSaveModel()
+                ->importAllowQuoteItemsFromProducts(Mage::helper('core')->jsonDecode($data));
         }
 
         /**
@@ -269,9 +289,14 @@ class Mage_Adminhtml_Sales_Order_CreateController extends Mage_Adminhtml_Control
         }
 
         $data = $this->getRequest()->getPost('order');
-        if (!empty($data['coupon']['code'])) {
-            if ($this->_getQuote()->getCouponCode() !== $data['coupon']['code']) {
-                $this->_getSession()->addError($this->__('"%s" coupon code is not valid.', $data['coupon']['code']));
+        $couponCode = '';
+        if (isset($data) && isset($data['coupon']['code'])) {
+            $couponCode = trim($data['coupon']['code']);
+        }
+        if (!empty($couponCode)) {
+            if ($this->_getQuote()->getCouponCode() !== $couponCode) {
+                $this->_getSession()->addError(
+                    $this->__('"%s" coupon code is not valid.', $this->_getHelper()->escapeHtml($couponCode)));
             } else {
                 $this->_getSession()->addSuccess($this->__('The coupon code has been accepted.'));
             }
@@ -321,6 +346,9 @@ class Mage_Adminhtml_Sales_Order_CreateController extends Mage_Adminhtml_Control
         $this->_getSession()->clear();
         $orderId = $this->getRequest()->getParam('order_id');
         $order = Mage::getModel('sales/order')->load($orderId);
+        if (!Mage::helper('sales/reorder')->canReorder($order)) {
+            return $this->_forward('noRoute');
+        }
 
         if ($order->getId()) {
             $order->setReordered(true);
@@ -599,5 +627,15 @@ class Mage_Adminhtml_Sales_Order_CreateController extends Mage_Adminhtml_Control
             $session->unsUpdateResult();
             return false;
         }
+    }
+
+    /**
+     * Process data and display index page
+     */
+    public function processDataAction()
+    {
+        $this->_initSession();
+        $this->_processData();
+        $this->_forward('index');
     }
 }

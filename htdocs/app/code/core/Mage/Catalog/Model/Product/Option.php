@@ -20,16 +20,37 @@
  *
  * @category    Mage
  * @package     Mage_Catalog
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
 /**
  * Catalog product option model
  *
- * @category   Mage
- * @package    Mage_Catalog
- * @author     Magento Core Team <core@magentocommerce.com>
+ * @method Mage_Catalog_Model_Resource_Product_Option _getResource()
+ * @method Mage_Catalog_Model_Resource_Product_Option getResource()
+ * @method int getProductId()
+ * @method Mage_Catalog_Model_Product_Option setProductId(int $value)
+ * @method string getType()
+ * @method Mage_Catalog_Model_Product_Option setType(string $value)
+ * @method int getIsRequire()
+ * @method Mage_Catalog_Model_Product_Option setIsRequire(int $value)
+ * @method string getSku()
+ * @method Mage_Catalog_Model_Product_Option setSku(string $value)
+ * @method int getMaxCharacters()
+ * @method Mage_Catalog_Model_Product_Option setMaxCharacters(int $value)
+ * @method string getFileExtension()
+ * @method Mage_Catalog_Model_Product_Option setFileExtension(string $value)
+ * @method int getImageSizeX()
+ * @method Mage_Catalog_Model_Product_Option setImageSizeX(int $value)
+ * @method int getImageSizeY()
+ * @method Mage_Catalog_Model_Product_Option setImageSizeY(int $value)
+ * @method int getSortOrder()
+ * @method Mage_Catalog_Model_Product_Option setSortOrder(int $value)
+ *
+ * @category    Mage
+ * @package     Mage_Catalog
+ * @author      Magento Core Team <core@magentocommerce.com>
  */
 class Mage_Catalog_Model_Product_Option extends Mage_Core_Model_Abstract
 {
@@ -245,7 +266,11 @@ class Mage_Catalog_Model_Product_Option extends Mage_Core_Model_Abstract
             } else {
                 if ($this->getData('previous_type') != '') {
                     $previousType = $this->getData('previous_type');
-                    //if previous option has dfferent group from one is came now need to remove all data of previous group
+
+                    /**
+                     * if previous option has different group from one is came now
+                     * need to remove all data of previous group
+                     */
                     if ($this->getGroupByType($previousType) != $this->getGroupByType($this->getData('type'))) {
 
                         switch ($this->getGroupByType($previousType)) {
@@ -343,7 +368,7 @@ class Mage_Catalog_Model_Product_Option extends Mage_Core_Model_Abstract
      * get Product Option Collection
      *
      * @param Mage_Catalog_Model_Product $product
-     * @return Mage_Catalog_Model_Resource_Eav_Mysql4_Product_Option_Collection
+     * @return Mage_Catalog_Model_Resource_Product_Option_Collection
      */
     public function getProductOptionCollection(Mage_Catalog_Model_Product $product)
     {
@@ -352,9 +377,13 @@ class Mage_Catalog_Model_Product_Option extends Mage_Core_Model_Abstract
             ->addTitleToResult($product->getStoreId())
             ->addPriceToResult($product->getStoreId())
             ->setOrder('sort_order', 'asc')
-            ->setOrder('title', 'asc')
-            ->addValuesToResult($product->getStoreId());
+            ->setOrder('title', 'asc');
 
+        if ($this->getAddRequiredFilter()) {
+            $collection->addRequiredFilter($this->getAddRequiredFilterValue());
+        }
+
+        $collection->addValuesToResult($product->getStoreId());
         return $collection;
     }
 

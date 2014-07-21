@@ -20,13 +20,26 @@
  *
  * @category    Mage
  * @package     Mage_Wishlist
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
 
 /**
  * Wishlist item model
+ *
+ * @method Mage_Wishlist_Model_Resource_Item _getResource()
+ * @method Mage_Wishlist_Model_Resource_Item getResource()
+ * @method int getWishlistId()
+ * @method Mage_Wishlist_Model_Item setWishlistId(int $value)
+ * @method int getProductId()
+ * @method Mage_Wishlist_Model_Item setProductId(int $value)
+ * @method int getStoreId()
+ * @method Mage_Wishlist_Model_Item setStoreId(int $value)
+ * @method string getAddedAt()
+ * @method Mage_Wishlist_Model_Item setAddedAt(string $value)
+ * @method string getDescription()
+ * @method Mage_Wishlist_Model_Item setDescription(string $value)
  *
  * @category    Mage
  * @package     Mage_Wishlist
@@ -37,7 +50,13 @@ class Mage_Wishlist_Model_Item extends Mage_Core_Model_Abstract
 {
     const EXCEPTION_CODE_NOT_SALABLE            = 901;
     const EXCEPTION_CODE_HAS_REQUIRED_OPTIONS   = 902;
-    const EXCEPTION_CODE_IS_GROUPED_PRODUCT     = 903; // deprecated after 1.4.2.0, because we can store product configuration and add grouped products
+    /**
+     * We can store product store product configuration
+     * and add grouped attributes after 1.4.2.0
+     *
+     * @deprecated after 1.4.2.0
+     */
+    const EXCEPTION_CODE_IS_GROUPED_PRODUCT     = 903;
 
     /**
      * Custom path to download attached file
@@ -95,6 +114,18 @@ class Mage_Wishlist_Model_Item extends Mage_Core_Model_Abstract
     protected function _construct()
     {
         $this->_init('wishlist/item');
+    }
+
+    /**
+     * Set quantity. If quantity is less than 0 - set it to 1
+     *
+     * @param int $qty
+     * @return Mage_Wishlist_Model_Item
+     */
+    public function setQty($qty)
+    {
+        $this->setData('qty', ($qty >= 0) ? $qty : 1 );
+        return $this;
     }
 
     /**
@@ -399,10 +430,49 @@ class Mage_Wishlist_Model_Item extends Mage_Core_Model_Abstract
     public function getBuyRequest()
     {
         $option = $this->getOptionByCode('info_buyRequest');
-        $buyRequest = new Varien_Object($option ? unserialize($option->getValue()) : null);
+        $initialData = $option ? unserialize($option->getValue()) : null;
+
+        // There can be wrong data due to bug in Grouped products - it formed 'info_buyRequest' as Varien_Object
+        if ($initialData instanceof Varien_Object) {
+            $initialData = $initialData->getData();
+        }
+
+        $buyRequest = new Varien_Object($initialData);
         $buyRequest->setOriginalQty($buyRequest->getQty())
             ->setQty($this->getQty() * 1);
         return $buyRequest;
+    }
+
+    /**
+     * Merge data to item info_buyRequest option
+     *
+     * @param array|Varien_Object $buyRequest
+     * @return Mage_Wishlist_Model_Item
+     */
+    public function mergeBuyRequest($buyRequest) {
+        if ($buyRequest instanceof Varien_Object) {
+            $buyRequest = $buyRequest->getData();
+        }
+
+        if (empty($buyRequest) || !is_array($buyRequest)) {
+            return $this;
+        }
+
+        $oldBuyRequest = $this->getBuyRequest()
+            ->getData();
+        $sBuyRequest = serialize($buyRequest + $oldBuyRequest);
+
+        $option = $this->getOptionByCode('info_buyRequest');
+        if ($option) {
+            $option->setValue($sBuyRequest);
+        } else {
+            $this->addOption(array(
+                'code'  => 'info_buyRequest',
+                'value' => $sBuyRequest
+            ));
+        }
+
+        return $this;
     }
 
     /**

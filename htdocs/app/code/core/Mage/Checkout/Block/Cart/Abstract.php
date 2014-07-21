@@ -20,7 +20,7 @@
  *
  * @category    Mage
  * @package     Mage_Checkout
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -74,7 +74,7 @@ abstract class Mage_Checkout_Block_Cart_Abstract extends Mage_Core_Block_Templat
      */
     public function getItemRender($type)
     {
-        return $this->getItemRendererInfo();
+        return $this->getItemRendererInfo($type);
     }
 
     /**
@@ -129,7 +129,7 @@ abstract class Mage_Checkout_Block_Cart_Abstract extends Mage_Core_Block_Templat
     /**
      * Get checkout session
      *
-     * @return Mage_Checkout_Model_session
+     * @return Mage_Checkout_Model_Session
      */
     public function getCheckout()
     {
@@ -185,5 +185,18 @@ abstract class Mage_Checkout_Block_Cart_Abstract extends Mage_Core_Block_Templat
             $this->_totals = $this->getQuote()->getTotals();
         }
         return $this->_totals;
+    }
+
+    /**
+     * Check if can apply msrp to totals
+     *
+     * @return bool
+     */
+    public function canApplyMsrp()
+    {
+        if (!$this->getQuote()->hasCanApplyMsrp() && Mage::helper('catalog')->isMsrpEnabled()) {
+            $this->getQuote()->collectTotals();
+        }
+        return $this->getQuote()->getCanApplyMsrp();
     }
 }

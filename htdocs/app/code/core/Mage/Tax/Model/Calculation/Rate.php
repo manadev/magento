@@ -20,14 +20,35 @@
  *
  * @category    Mage
  * @package     Mage_Tax
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
 /**
  * Tax Rate Model
  *
- * @author Magento Core Team <core@magentocommerce.com>
+ * @method Mage_Tax_Model_Resource_Calculation_Rate _getResource()
+ * @method Mage_Tax_Model_Resource_Calculation_Rate getResource()
+ * @method string getTaxCountryId()
+ * @method Mage_Tax_Model_Calculation_Rate setTaxCountryId(string $value)
+ * @method int getTaxRegionId()
+ * @method Mage_Tax_Model_Calculation_Rate setTaxRegionId(int $value)
+ * @method string getTaxPostcode()
+ * @method Mage_Tax_Model_Calculation_Rate setTaxPostcode(string $value)
+ * @method string getCode()
+ * @method Mage_Tax_Model_Calculation_Rate setCode(string $value)
+ * @method float getRate()
+ * @method Mage_Tax_Model_Calculation_Rate setRate(float $value)
+ * @method int getZipIsRange()
+ * @method Mage_Tax_Model_Calculation_Rate setZipIsRange(int $value)
+ * @method int getZipFrom()
+ * @method Mage_Tax_Model_Calculation_Rate setZipFrom(int $value)
+ * @method int getZipTo()
+ * @method Mage_Tax_Model_Calculation_Rate setZipTo(int $value)
+ *
+ * @category    Mage
+ * @package     Mage_Tax
+ * @author      Magento Core Team <core@magentocommerce.com>
  */
 class Mage_Tax_Model_Calculation_Rate extends Mage_Core_Model_Abstract
 {
@@ -50,10 +71,9 @@ class Mage_Tax_Model_Calculation_Rate extends Mage_Core_Model_Abstract
     protected function _beforeSave()
     {
         if ($this->getZipIsRange()) {
-            $zipFrom = (strlen($this->getZipFrom()) > 10) ? substr($this->getZipFrom(), 0, 10) : $this->getZipFrom();
-            $zipTo   = (strlen($this->getZipTo()) > 10) ? substr($this->getZipTo(), 0, 10) : $this->getZipTo();
-
-            $this->setTaxPostcode("{$zipFrom}-{$zipTo}");
+            $zipFrom = substr($this->getZipFrom(), 0, 9);
+            $zipTo = substr($this->getZipTo(), 0, 9);
+            $this->setTaxPostcode($zipFrom . '-' . $zipTo);
         } else {
             $taxPostCode = $this->getTaxPostcode();
 

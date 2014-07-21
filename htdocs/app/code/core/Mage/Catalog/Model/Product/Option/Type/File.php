@@ -20,7 +20,7 @@
  *
  * @category    Mage
  * @package     Mage_Catalog
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -53,8 +53,11 @@ class Mage_Catalog_Model_Product_Option_Type_File extends Mage_Catalog_Model_Pro
     public function getCustomizedView($optionInfo)
     {
         try {
-            $result = $this->_getOptionHtml($optionInfo['option_value']);
-            return $result;
+            if (isset($optionInfo['option_value'])) {
+                return $this->_getOptionHtml($optionInfo['option_value']);
+            } elseif (isset($optionInfo['value'])) {
+                return $optionInfo['value'];
+            }
         } catch (Exception $e) {
             return $optionInfo['value'];
         }
@@ -412,19 +415,15 @@ class Mage_Catalog_Model_Product_Option_Type_File extends Mage_Catalog_Model_Pro
         $result = array();
         foreach ($errors as $errorCode) {
             if ($errorCode == Zend_Validate_File_ExcludeExtension::FALSE_EXTENSION) {
-                $result[] = Mage::helper('catalog')->__("The file '%s' for '%s' has an invalid extension",
-                    $fileInfo['title'], $option->getTitle());
+                $result[] = Mage::helper('catalog')->__("The file '%s' for '%s' has an invalid extension", $fileInfo['title'], $option->getTitle());
             } elseif ($errorCode == Zend_Validate_File_Extension::FALSE_EXTENSION) {
-                $result[] = Mage::helper('catalog')->__("The file '%s' for '%s' has an invalid extension",
-                    $fileInfo['title'], $option->getTitle());
+                $result[] = Mage::helper('catalog')->__("The file '%s' for '%s' has an invalid extension", $fileInfo['title'], $option->getTitle());
             } elseif ($errorCode == Zend_Validate_File_ImageSize::WIDTH_TOO_BIG
                 || $errorCode == Zend_Validate_File_ImageSize::HEIGHT_TOO_BIG)
             {
-                $result[] = Mage::helper('catalog')->__("Maximum allowed image size for '%s' is %sx%s px.",
-                    $option->getTitle(), $option->getImageSizeX(), $option->getImageSizeY());
+                $result[] = Mage::helper('catalog')->__("Maximum allowed image size for '%s' is %sx%s px.", $option->getTitle(), $option->getImageSizeX(), $option->getImageSizeY());
             } elseif ($errorCode == Zend_Validate_File_FilesSize::TOO_BIG) {
-                $result[] = Mage::helper('catalog')->__("The file '%s' you uploaded is larger than %s Megabytes allowed by server",
-                    $fileInfo['title'], $this->_bytesToMbytes($this->_getUploadMaxFilesize()));
+                $result[] = Mage::helper('catalog')->__("The file '%s' you uploaded is larger than %s Megabytes allowed by server", $fileInfo['title'], $this->_bytesToMbytes($this->_getUploadMaxFilesize()));
             }
         }
         return $result;
@@ -508,24 +507,44 @@ class Mage_Catalog_Model_Product_Option_Type_File extends Mage_Catalog_Model_Pro
      */
     protected function _getOptionHtml($optionValue)
     {
+        $value = $this->_unserializeValue($optionValue);
         try {
-            $value = unserialize($optionValue);
-        } catch (Exception $e) {
-            $value = $optionValue;
-        }
-        try {
-            if ($value['width'] > 0 && $value['height'] > 0) {
+            if (isset($value) && isset($value['width']) && isset($value['height'])
+                && $value['width'] > 0 && $value['height'] > 0
+            ) {
                 $sizes = $value['width'] . ' x ' . $value['height'] . ' ' . Mage::helper('catalog')->__('px.');
             } else {
                 $sizes = '';
             }
+
+            $urlRoute = !empty($value['url']['route']) ? $value['url']['route'] : '';
+            $urlParams = !empty($value['url']['params']) ? $value['url']['params'] : '';
+            $title = !empty($value['title']) ? $value['title'] : '';
+
             return sprintf('<a href="%s" target="_blank">%s</a> %s',
-                $this->_getOptionDownloadUrl($value['url']['route'], $value['url']['params']),
-                Mage::helper('core')->htmlEscape($value['title']),
+                $this->_getOptionDownloadUrl($urlRoute, $urlParams),
+                Mage::helper('core')->htmlEscape($title),
                 $sizes
             );
         } catch (Exception $e) {
             Mage::throwException(Mage::helper('catalog')->__("File options format is not valid."));
+        }
+    }
+
+    /**
+     * Create a value from a storable representation
+     *
+     * @param mixed $value
+     * @return array
+     */
+    protected function _unserializeValue($value)
+    {
+        if (is_array($value)) {
+            return $value;
+        } elseif (is_string($value) && !empty($value)) {
+            return unserialize($value);
+        } else {
+            return array();
         }
     }
 

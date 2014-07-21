@@ -20,7 +20,7 @@
  *
  * @category    Mage
  * @package     Mage_Adminhtml
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -79,7 +79,7 @@ class Mage_Adminhtml_Block_Sales_Order_View_Info extends Mage_Adminhtml_Block_Sa
 
     public function getCustomerViewUrl()
     {
-        if ($this->getOrder()->getCustomerIsGuest()) {
+        if ($this->getOrder()->getCustomerIsGuest() || !$this->getOrder()->getCustomerId()) {
             return false;
         }
         return $this->getUrl('*/customer/edit', array('id' => $this->getOrder()->getCustomerId()));
@@ -160,5 +160,14 @@ class Mage_Adminhtml_Block_Sales_Order_View_Info extends Mage_Adminhtml_Block_Sa
         }
         $url = $this->getUrl('*/sales_order/address', array('address_id'=>$address->getId()));
         return '<a href="'.$url.'">' . $label . '</a>';
+    }
+
+    /**
+     * Whether Customer IP address should be displayed on sales documents
+     * @return bool
+     */
+    public function shouldDisplayCustomerIp()
+    {
+        return !Mage::getStoreConfigFlag('sales/general/hide_customer_ip', $this->getOrder()->getStoreId());
     }
 }

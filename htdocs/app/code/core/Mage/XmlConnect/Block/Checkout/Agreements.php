@@ -20,16 +20,16 @@
  *
  * @category    Mage
  * @package     Mage_XmlConnect
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
 /**
  * One page checkout agreements xml renderer
  *
- * @category   Mage
- * @package    Mage_XmlConnect
- * @author     Magento Core Team <core@magentocommerce.com>
+ * @category    Mage
+ * @package     Mage_XmlConnect
+ * @author      Magento Core Team <core@magentocommerce.com>
  */
 class Mage_XmlConnect_Block_Checkout_Agreements extends Mage_Checkout_Block_Agreements
 {
@@ -40,15 +40,18 @@ class Mage_XmlConnect_Block_Checkout_Agreements extends Mage_Checkout_Block_Agre
      */
     protected function _toHtml()
     {
-        $agreementsXmlObj = new Mage_XmlConnect_Model_Simplexml_Element('<agreements></agreements>');
+        /** @var $agreementsXmlObj Mage_XmlConnect_Model_Simplexml_Element */
+        $agreementsXmlObj = Mage::getModel('xmlconnect/simplexml_element', '<agreements></agreements>');
         if ($this->getAgreements()) {
             foreach ($this->getAgreements() as $agreement) {
                 $itemXmlObj = $agreementsXmlObj->addChild('item');
-                $content = $agreementsXmlObj->xmlentities($agreement->getContent());
+                $content = $agreement->getContent();
                 if (!$agreement->getIsHtml()) {
-                    $content = nl2br(strip_tags($content));
+                    $content = nl2br($agreementsXmlObj->escapeXml($content));
+                } else {
+                    $agreementsXmlObj->xmlentities($content);
                 }
-                $agreementText = $agreementsXmlObj->xmlentities(strip_tags($agreement->getCheckboxText()));
+                $agreementText = $agreementsXmlObj->escapeXml($agreement->getCheckboxText());
                 $itemXmlObj->addChild('label', $agreementText);
                 $itemXmlObj->addChild('content', $content);
                 $itemXmlObj->addChild('code', 'agreement[' . $agreement->getId() . ']');
@@ -58,5 +61,4 @@ class Mage_XmlConnect_Block_Checkout_Agreements extends Mage_Checkout_Block_Agre
 
         return $agreementsXmlObj->asNiceXml();
     }
-
 }

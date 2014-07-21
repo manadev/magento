@@ -20,7 +20,7 @@
  *
  * @category    Mage
  * @package     Mage_Checkout
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -33,7 +33,6 @@
  */
 class Mage_Checkout_Block_Links extends Mage_Core_Block_Template
 {
-
     /**
      * Add shopping cart link to parent block
      *
@@ -43,16 +42,17 @@ class Mage_Checkout_Block_Links extends Mage_Core_Block_Template
     {
         $parentBlock = $this->getParentBlock();
         if ($parentBlock && Mage::helper('core')->isModuleOutputEnabled('Mage_Checkout')) {
-            $count = $this->helper('checkout/cart')->getSummaryCount();
-
-            if( $count == 1 ) {
+            $count = $this->getSummaryQty() ? $this->getSummaryQty()
+                : $this->helper('checkout/cart')->getSummaryCount();
+            if ($count == 1) {
                 $text = $this->__('My Cart (%s item)', $count);
-            } elseif( $count > 0 ) {
+            } elseif ($count > 0) {
                 $text = $this->__('My Cart (%s items)', $count);
             } else {
                 $text = $this->__('My Cart');
             }
 
+            $parentBlock->removeLinkByUrl($this->getUrl('checkout/cart'));
             $parentBlock->addLink($text, 'checkout/cart', $text, true, array(), 50, null, 'class="top-link-cart"');
         }
         return $this;
@@ -72,9 +72,12 @@ class Mage_Checkout_Block_Links extends Mage_Core_Block_Template
         $parentBlock = $this->getParentBlock();
         if ($parentBlock && Mage::helper('core')->isModuleOutputEnabled('Mage_Checkout')) {
             $text = $this->__('Checkout');
-            $parentBlock->addLink($text, 'checkout', $text, true, array(), 60, null, 'class="top-link-checkout"');
+            $parentBlock->addLink(
+                $text, 'checkout', $text,
+                true, array('_secure' => true), 60, null,
+                'class="top-link-checkout"'
+            );
         }
         return $this;
     }
-
 }

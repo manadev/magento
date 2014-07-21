@@ -20,7 +20,7 @@
  *
  * @category    Mage
  * @package     Mage_Widget
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -170,18 +170,36 @@ class Mage_Widget_Block_Adminhtml_Widget_Chooser extends Mage_Adminhtml_Block_Te
             ->setId($chooserId . 'control')
             ->setClass('btn-chooser')
             ->setLabel($buttons['open'])
-            ->setOnclick($chooserId.'.choose()');
+            ->setOnclick($chooserId.'.choose()')
+            ->setDisabled($element->getReadonly());
         $chooser->setData('after_element_html', $hiddenHtml . $chooseButton->toHtml());
 
         // render label and chooser scripts
         $configJson = Mage::helper('core')->jsonEncode($config->getData());
         return '
-            <label class="widget-option-label" id="'.$chooserId . 'label">'.($this->getLabel() ? $this->getLabel() : Mage::helper('widget')->__('Not Selected')).'</label>
-            <div id="'.$chooserId . 'advice-container" class="hidden"></div>
-            <script type="text/javascript">
-                '.$chooserId.' = new WysiwygWidget.chooser("'.$chooserId.'", "'.$this->getSourceUrl().'", '.$configJson.');
-                $("'.$chooserId.'value").advaiceContainer = "'.$chooserId.'advice-container";
-            </script>
+            <label class="widget-option-label" id="' . $chooserId . 'label">'
+            . ($this->getLabel() ? $this->getLabel() : Mage::helper('widget')->__('Not Selected')) . '</label>
+            <div id="' . $chooserId . 'advice-container" class="hidden"></div>
+            <script type="text/javascript">//<![CDATA[
+                (function() {
+                    var instantiateChooser = function() {
+                        window.' . $chooserId . ' = new WysiwygWidget.chooser(
+                            "' . $chooserId . '",
+                            "' . $this->getSourceUrl() . '",
+                            ' . $configJson . '
+                        );
+                        if ($("' . $chooserId . 'value")) {
+                            $("' . $chooserId . 'value").advaiceContainer = "' . $chooserId . 'advice-container";
+                        }
+                    }
+
+                    if (document.loaded) { //allow load over ajax
+                        instantiateChooser();
+                    } else {
+                        document.observe("dom:loaded", instantiateChooser);
+                    }
+                })();
+            //]]></script>
         ';
     }
 }

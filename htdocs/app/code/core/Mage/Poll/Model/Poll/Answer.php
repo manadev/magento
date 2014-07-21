@@ -20,15 +20,26 @@
  *
  * @category    Mage
  * @package     Mage_Poll
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
 /**
  * Poll answers model
  *
- * @category   Mage
- * @package    Mage_Poll
+ * @method Mage_Poll_Model_Resource_Poll_Answer _getResource()
+ * @method Mage_Poll_Model_Resource_Poll_Answer getResource()
+ * @method int getPollId()
+ * @method Mage_Poll_Model_Poll_Answer setPollId(int $value)
+ * @method string getAnswerTitle()
+ * @method Mage_Poll_Model_Poll_Answer setAnswerTitle(string $value)
+ * @method int getVotesCount()
+ * @method Mage_Poll_Model_Poll_Answer setVotesCount(int $value)
+ * @method int getAnswerOrder()
+ * @method Mage_Poll_Model_Poll_Answer setAnswerOrder(int $value)
+ *
+ * @category    Mage
+ * @package     Mage_Poll
  * @author      Magento Core Team <core@magentocommerce.com>
  */
 
@@ -41,7 +52,9 @@ class Mage_Poll_Model_Poll_Answer extends Mage_Core_Model_Abstract
 
     public function countPercent($poll)
     {
-        $this->setPercent(round(( $poll->getVotesCount() > 0 ) ? ($this->getVotesCount() * 100 / $poll->getVotesCount()) : 0));
+        $this->setPercent(
+            round(($poll->getVotesCount() > 0 ) ? ($this->getVotesCount() * 100 / $poll->getVotesCount()) : 0, 2)
+        );
         return $this;
     }
 

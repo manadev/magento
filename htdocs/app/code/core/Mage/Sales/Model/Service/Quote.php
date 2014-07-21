@@ -20,7 +20,7 @@
  *
  * @category    Mage
  * @package     Mage_Sales
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -151,8 +151,14 @@ class Mage_Sales_Model_Service_Quote
             $order = $this->_convertor->addressToOrder($quote->getShippingAddress());
         }
         $order->setBillingAddress($this->_convertor->addressToOrderAddress($quote->getBillingAddress()));
+        if ($quote->getBillingAddress()->getCustomerAddress()) {
+            $order->getBillingAddress()->setCustomerAddress($quote->getBillingAddress()->getCustomerAddress());
+        }
         if (!$isVirtual) {
             $order->setShippingAddress($this->_convertor->addressToOrderAddress($quote->getShippingAddress()));
+            if ($quote->getShippingAddress()->getCustomerAddress()) {
+                $order->getShippingAddress()->setCustomerAddress($quote->getShippingAddress()->getCustomerAddress());
+            }
         }
         $order->setPayment($this->_convertor->paymentToOrderPayment($quote->getPayment()));
 
@@ -184,6 +190,11 @@ class Mage_Sales_Model_Service_Quote
             $this->_inactivateQuote();
             Mage::dispatchEvent('sales_model_service_quote_submit_success', array('order'=>$order, 'quote'=>$quote));
         } catch (Exception $e) {
+
+            if (!Mage::getSingleton('customer/session')->isLoggedIn()) {
+                // reset customer ID's on exception, because customer not saved
+                $quote->getCustomer()->setId(null);
+            }
 
             //reset order ID's on exception, because order not saved
             $order->setId(null);
@@ -278,31 +289,30 @@ class Mage_Sales_Model_Service_Quote
      */
     protected function _validate()
     {
-        $helper = Mage::helper('sales');
         if (!$this->getQuote()->isVirtual()) {
             $address = $this->getQuote()->getShippingAddress();
             $addressValidation = $address->validate();
             if ($addressValidation !== true) {
                 Mage::throwException(
-                    $helper->__('Please check shipping address information. %s', implode(' ', $addressValidation))
+                    Mage::helper('sales')->__('Please check shipping address information. %s', implode(' ', $addressValidation))
                 );
             }
             $method= $address->getShippingMethod();
             $rate  = $address->getShippingRateByCode($method);
             if (!$this->getQuote()->isVirtual() && (!$method || !$rate)) {
-                Mage::throwException($helper->__('Please specify a shipping method.'));
+                Mage::throwException(Mage::helper('sales')->__('Please specify a shipping method.'));
             }
         }
 
         $addressValidation = $this->getQuote()->getBillingAddress()->validate();
         if ($addressValidation !== true) {
             Mage::throwException(
-                $helper->__('Please check billing address information. %s', implode(' ', $addressValidation))
+                Mage::helper('sales')->__('Please check billing address information. %s', implode(' ', $addressValidation))
             );
         }
 
         if (!($this->getQuote()->getPayment()->getMethod())) {
-            Mage::throwException($helper->__('Please select a valid payment method.'));
+            Mage::throwException(Mage::helper('sales')->__('Please select a valid payment method.'));
         }
 
         return $this;

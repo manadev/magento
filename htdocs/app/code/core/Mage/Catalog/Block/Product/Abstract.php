@@ -20,7 +20,7 @@
  *
  * @category    Mage
  * @package     Mage_Catalog
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -71,6 +71,13 @@ abstract class Mage_Catalog_Block_Product_Abstract extends Mage_Core_Block_Templ
      * @var array
      */
     protected $_columnCountLayoutDepend = array();
+
+    /**
+     * Default MAP renderer type
+     *
+     * @var string
+     */
+    protected $_mapRenderer = 'msrp';
 
     /**
      * Retrieve url for add product to cart
@@ -196,7 +203,19 @@ abstract class Mage_Catalog_Block_Product_Abstract extends Mage_Core_Block_Templ
      */
     public function getPriceHtml($product, $displayMinimalPrice = false, $idSuffix = '')
     {
-        return $this->_preparePriceRenderer($product->getTypeId())
+        $type_id = $product->getTypeId();
+        if (Mage::helper('catalog')->canApplyMsrp($product)) {
+            $realPriceHtml = $this->_preparePriceRenderer($type_id)
+                ->setProduct($product)
+                ->setDisplayMinimalPrice($displayMinimalPrice)
+                ->setIdSuffix($idSuffix)
+                ->toHtml();
+            $product->setAddToCartUrl($this->getAddToCartUrl($product));
+            $product->setRealPriceHtml($realPriceHtml);
+            $type_id = $this->_mapRenderer;
+        }
+
+        return $this->_preparePriceRenderer($type_id)
             ->setProduct($product)
             ->setDisplayMinimalPrice($displayMinimalPrice)
             ->setIdSuffix($idSuffix)
@@ -228,10 +247,14 @@ abstract class Mage_Catalog_Block_Product_Abstract extends Mage_Core_Block_Templ
      * @param bool $displayIfNoReviews
      * @return string
      */
-    public function getReviewsSummaryHtml(Mage_Catalog_Model_Product $product, $templateType = false, $displayIfNoReviews = false)
+    public function getReviewsSummaryHtml(Mage_Catalog_Model_Product $product, $templateType = false,
+        $displayIfNoReviews = false)
     {
-        $this->_initReviewsHelperBlock();
-        return $this->_reviewsHelperBlock->getSummaryHtml($product, $templateType, $displayIfNoReviews);
+        if ($this->_initReviewsHelperBlock()) {
+            return $this->_reviewsHelperBlock->getSummaryHtml($product, $templateType, $displayIfNoReviews);
+        }
+
+        return '';
     }
 
     /**
@@ -239,22 +262,33 @@ abstract class Mage_Catalog_Block_Product_Abstract extends Mage_Core_Block_Templ
      *
      * @param string $type
      * @param string $template
+     * @return string
      */
     public function addReviewSummaryTemplate($type, $template)
     {
-        $this->_initReviewsHelperBlock();
-        $this->_reviewsHelperBlock->addTemplate($type, $template);
+        if ($this->_initReviewsHelperBlock()) {
+            $this->_reviewsHelperBlock->addTemplate($type, $template);
+        }
+
+        return '';
     }
 
     /**
      * Create reviews summary helper block once
      *
+     * @return boolean
      */
     protected function _initReviewsHelperBlock()
     {
         if (!$this->_reviewsHelperBlock) {
-            $this->_reviewsHelperBlock = $this->getLayout()->createBlock('review/helper');
+            if (!Mage::helper('catalog')->isModuleEnabled('Mage_Review')) {
+                return false;
+            } else {
+                $this->_reviewsHelperBlock = $this->getLayout()->createBlock('review/helper');
+            }
         }
+
+        return true;
     }
 
     /**
@@ -279,9 +313,10 @@ abstract class Mage_Catalog_Block_Product_Abstract extends Mage_Core_Block_Templ
         return $this->getData('tier_price_template');
     }
     /**
-     * Returns product tierprice block html
+     * Returns product tier price block html
      *
      * @param Mage_Catalog_Model_Product $product
+     * @return string
      */
     public function getTierPriceHtml($product = null)
     {
@@ -311,22 +346,46 @@ abstract class Mage_Catalog_Block_Product_Abstract extends Mage_Core_Block_Templ
         $res = array();
         if (is_array($prices)) {
             foreach ($prices as $price) {
-                $price['price_qty'] = $price['price_qty']*1;
-                if ($product->getPrice() != $product->getFinalPrice()) {
-                    if ($price['price']<$product->getFinalPrice()) {
-                        $price['savePercent'] = ceil(100 - (( 100/$product->getFinalPrice() ) * $price['price'] ));
-                        $price['formated_price'] = Mage::app()->getStore()->formatPrice(Mage::app()->getStore()->convertPrice(Mage::helper('tax')->getPrice($product, $price['website_price'])));
-                        $price['formated_price_incl_tax'] = Mage::app()->getStore()->formatPrice(Mage::app()->getStore()->convertPrice(Mage::helper('tax')->getPrice($product, $price['website_price'], true)));
-                        $res[] = $price;
-                    }
+                $price['price_qty'] = $price['price_qty'] * 1;
+
+                $_productPrice = $product->getPrice();
+                if ($_productPrice != $product->getFinalPrice()) {
+                    $_productPrice = $product->getFinalPrice();
                 }
-                else {
-                    if ($price['price']<$product->getPrice()) {
-                        $price['savePercent'] = ceil(100 - (( 100/$product->getPrice() ) * $price['price'] ));
-                        $price['formated_price'] = Mage::app()->getStore()->formatPrice(Mage::app()->getStore()->convertPrice(Mage::helper('tax')->getPrice($product, $price['website_price'])));
-                        $price['formated_price_incl_tax'] = Mage::app()->getStore()->formatPrice(Mage::app()->getStore()->convertPrice(Mage::helper('tax')->getPrice($product, $price['website_price'], true)));
-                        $res[] = $price;
+
+                // Group price must be used for percent calculation if it is lower
+                $groupPrice = $product->getGroupPrice();
+                if ($_productPrice > $groupPrice) {
+                    $_productPrice = $groupPrice;
+                }
+
+                if ($price['price'] < $_productPrice) {
+                    $price['savePercent'] = ceil(100 - ((100 / $_productPrice) * $price['price']));
+
+                    $tierPrice = Mage::app()->getStore()->convertPrice(
+                        Mage::helper('tax')->getPrice($product, $price['website_price'])
+                    );
+                    $price['formated_price'] = Mage::app()->getStore()->formatPrice($tierPrice);
+                    $price['formated_price_incl_tax'] = Mage::app()->getStore()->formatPrice(
+                        Mage::app()->getStore()->convertPrice(
+                            Mage::helper('tax')->getPrice($product, $price['website_price'], true)
+                        )
+                    );
+
+                    if (Mage::helper('catalog')->canApplyMsrp($product)) {
+                        $oldPrice = $product->getFinalPrice();
+                        $product->setPriceCalculation(false);
+                        $product->setPrice($tierPrice);
+                        $product->setFinalPrice($tierPrice);
+
+                        $this->getPriceHtml($product);
+                        $product->setPriceCalculation(true);
+
+                        $price['real_price_html'] = $product->getRealPriceHtml();
+                        $product->setFinalPrice($oldPrice);
                     }
+
+                    $res[] = $price;
                 }
             }
         }
@@ -339,10 +398,10 @@ abstract class Mage_Catalog_Block_Product_Abstract extends Mage_Core_Block_Templ
      * to get correct values in different products lists.
      * E.g. crosssells, upsells, new products, recently viewed
      *
-     * @param Mage_Catalog_Model_Resource_Eav_Mysql4_Product_Collection $collection
-     * @return Mage_Catalog_Model_Resource_Eav_Mysql4_Product_Collection
+     * @param Mage_Catalog_Model_Resource_Product_Collection $collection
+     * @return Mage_Catalog_Model_Resource_Product_Collection
      */
-    protected function _addProductAttributesAndPrices(Mage_Catalog_Model_Resource_Eav_Mysql4_Product_Collection $collection)
+    protected function _addProductAttributesAndPrices(Mage_Catalog_Model_Resource_Product_Collection $collection)
     {
         return $collection
             ->addMinimalPrice()
@@ -439,7 +498,7 @@ abstract class Mage_Catalog_Block_Product_Abstract extends Mage_Core_Block_Templ
      * Add row size depends on page layout
      *
      * @param string $pageLayout
-     * @param int $rowSize
+     * @param int $columnCount
      * @return Mage_Catalog_Block_Product_List
      */
     public function addColumnCountLayoutDepend($pageLayout, $columnCount)

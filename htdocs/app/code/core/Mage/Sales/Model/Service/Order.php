@@ -20,7 +20,7 @@
  *
  * @category    Mage
  * @package     Mage_Sales
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -77,9 +77,10 @@ class Mage_Sales_Model_Service_Order
     }
 
     /**
-     * Prepare order invoice based on order data and requested items qtys
+     * Prepare order invoice based on order data and requested items qtys. If $qtys is not empty - the function will
+     * prepare only specified items, otherwise all containing in the order.
      *
-     * @param array $data
+     * @param array $qtys
      * @return Mage_Sales_Model_Order_Invoice
      */
     public function prepareInvoice($qtys = array())
@@ -87,20 +88,18 @@ class Mage_Sales_Model_Service_Order
         $invoice = $this->_convertor->toInvoice($this->_order);
         $totalQty = 0;
         foreach ($this->_order->getAllItems() as $orderItem) {
-            if (!$this->_canInvoiceItem($orderItem, $qtys)) {
+            if (!$this->_canInvoiceItem($orderItem, array())) {
                 continue;
             }
             $item = $this->_convertor->itemToInvoiceItem($orderItem);
             if ($orderItem->isDummy()) {
                 $qty = $orderItem->getQtyOrdered() ? $orderItem->getQtyOrdered() : 1;
-            } else {
+            } else if (!empty($qtys)) {
                 if (isset($qtys[$orderItem->getId()])) {
                     $qty = (float) $qtys[$orderItem->getId()];
-                } elseif (!count($qtys)) {
-                    $qty = $orderItem->getQtyToInvoice();
-                } else {
-                    continue;
                 }
+            } else {
+                $qty = $orderItem->getQtyToInvoice();
             }
             $totalQty += $qty;
             $item->setQty($qty);
@@ -115,7 +114,7 @@ class Mage_Sales_Model_Service_Order
     /**
      * Prepare order shipment based on order items and requested items qty
      *
-     * @param array $data
+     * @param array $qtys
      * @return Mage_Sales_Model_Order_Shipment
      */
     public function prepareShipment($qtys = array())
@@ -128,8 +127,28 @@ class Mage_Sales_Model_Service_Order
             }
 
             $item = $this->_convertor->itemToShipmentItem($orderItem);
+
             if ($orderItem->isDummy(true)) {
-                $qty = 1;
+                $qty = 0;
+                if (isset($qtys[$orderItem->getParentItemId()])) {
+                    $productOptions = $orderItem->getProductOptions();
+                    if (isset($productOptions['bundle_selection_attributes'])) {
+                        $bundleSelectionAttributes = unserialize($productOptions['bundle_selection_attributes']);
+
+                        if ($bundleSelectionAttributes) {
+                            $qty = $bundleSelectionAttributes['qty'] * $qtys[$orderItem->getParentItemId()];
+                            $qty = min($qty, $orderItem->getSimpleQtyToShip());
+
+                            $item->setQty($qty);
+                            $shipment->addItem($item);
+                            continue;
+                        } else {
+                            $qty = 1;
+                        }
+                    }
+                } else {
+                    $qty = 1;
+                }
             } else {
                 if (isset($qtys[$orderItem->getId()])) {
                     $qty = min($qtys[$orderItem->getId()], $orderItem->getQtyToShip());
@@ -139,11 +158,11 @@ class Mage_Sales_Model_Service_Order
                     continue;
                 }
             }
-
             $totalQty += $qty;
             $item->setQty($qty);
             $shipment->addItem($item);
         }
+
         $shipment->setTotalQty($totalQty);
         return $shipment;
     }
@@ -168,6 +187,7 @@ class Mage_Sales_Model_Service_Order
             $item = $this->_convertor->itemToCreditmemoItem($orderItem);
             if ($orderItem->isDummy()) {
                 $qty = 1;
+                $orderItem->setLockedDoShip(true);
             } else {
                 if (isset($qtys[$orderItem->getId()])) {
                     $qty = (float) $qtys[$orderItem->getId()];

@@ -20,21 +20,100 @@
  *
  * @category    Mage
  * @package     Mage_Connect
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
-class Mage_Connect_Config
-implements Iterator
+
+/**
+ * Magento Connect Config
+ *
+ * @property string php_ini
+ * @property string protocol
+ * @property string preferred_state
+ * @property string use_custom_permissions_mode
+ * @property string global_dir_mode
+ * @property string global_file_mode
+ * @property string downloader_path
+ * @property string magento_root
+ * @property string root_channel_uri
+ * @property string root_channel
+ * @property string remote_config
+ * @property string sync_pear
+ *
+ * @category    Mage
+ * @package     Mage_Connect
+ * @author      Magento Core Team <core@magentocommerce.com>
+ */
+class Mage_Connect_Config implements Iterator
 {
+    /**
+     * Config file name
+     *
+     * @var string
+     */
     protected $_configFile;
+
+    /**
+     * Config loaded from file
+     *
+     * @var bool
+     */
     protected $_configLoaded;
+
+    /**
+     * Save file even if it not modified
+     *
+     * @var bool
+     */
+    protected $_forceSave = false;
+
+    /**
+     * Stores last error message
+     *
+     * @var string
+     */
+    protected $_configError = '';
+
+    /**
+     * Header string
+     */
     const HEADER = "::ConnectConfig::v::1.0::";
+
+    /**
+     * Default paths
+     */
     const DEFAULT_DOWNLOADER_PATH = "downloader";
     const DEFAULT_CACHE_PATH = ".cache";
 
+    /**
+     * Array of default properties
+     * @var array
+     */
     protected $defaultProperties = array();
+
+    /**
+     * Array of properties
+     *
+     * @var array
+     */
     protected $properties = array();
 
+    /**
+     * Constructor loads the data from config file
+     * @param string $configFile
+     */
+    public function __construct($configFile = "connect.cfg")
+    {
+        $this->initProperties();
+        $this->_configFile = $configFile;
+        $this->load();
+    }
+
+    /**
+     * Initialise Properties and Default Properties
+     *
+     * @return void
+     */
     protected function initProperties()
     {
         $this->defaultProperties = array (
@@ -126,177 +205,319 @@ implements Iterator
         $this->properties = $this->defaultProperties;
     }
 
+    /**
+     * Retrieve Downloader Path
+     *
+     * @return string
+     */
     public function getDownloaderPath()
     {
         return $this->magento_root . DIRECTORY_SEPARATOR . $this->downloader_path;
     }
 
+    /**
+     * Retrieve Packages Cache Directory
+     *
+     * @return string
+     */
     public function getPackagesCacheDir()
     {
         return $this->getDownloaderPath() . DIRECTORY_SEPARATOR . self::DEFAULT_CACHE_PATH;
     }
 
+    /**
+     * Retrieve Channel Cache Directory
+     *
+     * @param string $channel
+     * @return string
+     */
     public function getChannelCacheDir($channel)
     {
         $channel = trim( $channel, "\\/");
         return $this->getPackagesCacheDir(). DIRECTORY_SEPARATOR . $channel;
     }
 
-    public function __construct($configFile = "connect.cfg")
-    {
-        $this->initProperties();
-        $this->_configFile = $configFile;
-        $this->load();
-    }
-
+    /**
+     * Get Config file name
+     *
+     * @return string
+     */
     public function getFilename()
     {
         return $this->_configFile;
     }
 
+    /**
+     * Load data from config file
+     *
+     * @return bool
+     */
     public function load()
     {
         $this->_configLoaded=false;
-        /**
-         * Trick: open in append mode to read,
-         * place pointer to begin
-         * create if not exists
-         */
-        if(is_file($this->_configFile)){
+        if (!is_file($this->_configFile)) {
+            if (!$this->save()) {
+                $this->_configError = 'Config file does not exists please save Settings';
+            } else {
+                $this->_configLoaded=true;
+                return true;
+            }
+            return false;
+        }
+
+        try {
             $f = fopen($this->_configFile, "r");
             fseek($f, 0, SEEK_SET);
-            $size = filesize($this->_configFile);
-            if(!$size) {
-                $this->store();
-                return;
-            }
+        } catch (Exception $e) {
+            $this->_configError = "Cannot open config file {$this->_configFile} please check file permission";
+            return false;
+        }
 
-            $headerLen = strlen(self::HEADER);
+        clearstatcache();
+        $size = filesize($this->_configFile);
+        if (!$size) {
+            $this->_configError = "Wrong config file size {$this->_configFile} please save Settings again";
+            return false;
+        }
+
+        $headerLen = strlen(self::HEADER);
+        try {
             $contents = fread($f, $headerLen);
-
-            if(self::HEADER != $contents) {
-                $this->store();
-                return;
+            if (self::HEADER != $contents) {
+                $this->_configError = "Wrong configuration file {$this->_configFile} please save Settings again";
+                return false;
             }
 
             $size -= $headerLen;
             $contents = fread($f, $size);
-
-            $data = @unserialize($contents);
-            if($data === unserialize(false)) {
-                $this->store();
-                return;
-            }
-            foreach($data as $k=>$v) {
-                $this->$k = $v;
-            }
-            fclose($f);
+        } catch (Exception $e) {
+            $this->_configError = "Configuration file {$this->_configFile} read error '{$e->getMessage()}'"
+                                . " please save Settings again";
+            return false;
         }
+        $data = @unserialize($contents);
+        if ($data === false) {
+            $this->_configError = "Wrong configuration file {$this->_configFile} please save Settings again";
+            return false;
+        }
+        foreach($data as $k=>$v) {
+            $this->$k = $v;
+        }
+        @fclose($f);
         $this->_configLoaded=true;
+        return true;
     }
 
+    /**
+     * Save config file on the disk or over ftp
+     *
+     * @return bool
+     */
     public function store()
     {
-        if($this->_configLoaded||strlen($this->remote_config)>0){
-            // @TODO: use ftp to save config
+        $result = false;
+        if ($this->_forceSave || $this->_configLoaded || strlen($this->remote_config)>0) {
             $data = serialize($this->toArray());
-            if(strlen($this->remote_config)>0){
-                $confFile=$this->downloader_path.DIRECTORY_SEPARATOR."connect.cfg";
-                $ftpObj = new Mage_Connect_Ftp();
-                $ftpObj->connect($this->remote_config);
-                $tempFile = tempnam(sys_get_temp_dir(),'config');
-                $f = @fopen($tempFile, "w+");
-                @fwrite($f, self::HEADER);
-                @fwrite($f, $data);
-                @fclose($f);
-                $ret=$ftpObj->upload($confFile, $tempFile);
-                $ftpObj->close();
-            }elseif(is_file($this->_configFile)&&is_writable($this->_configFile)||is_writable(getcwd())) {
-                $f = @fopen($this->_configFile, "w+");
-                @fwrite($f, self::HEADER);
-                @fwrite($f, $data);
-                @fclose($f);
+            if (strlen($this->remote_config)>0) {
+                //save config over ftp
+                $confFile = $this->downloader_path . DIRECTORY_SEPARATOR . "connect.cfg";
+                try {
+                    $ftpObj = new Mage_Connect_Ftp();
+                    $ftpObj->connect($this->remote_config);
+                } catch (Exception $e) {
+                    $this->_configError = 'Cannot access to deployment FTP path. '
+                                          . 'Check deployment FTP Installation path settings.';
+                    return $result;
+                }
+                try {
+                    $tempFile = tempnam(sys_get_temp_dir(),'config');
+                    $f = fopen($tempFile, "w+");
+                    fwrite($f, self::HEADER);
+                    fwrite($f, $data);
+                    fclose($f);
+                } catch (Exception $e) {
+                    $this->_configError = 'Cannot access to temporary file storage to save Settings.'
+                                          . 'Contact your system administrator.';
+                    return $result;
+                }
+                try {
+                    $result = $ftpObj->upload($confFile, $tempFile);
+                    $ftpObj->close();
+                } catch (Exception $e) {
+                    $this->_configError = 'Cannot write file over FTP. '
+                                          . 'Check deployment FTP Installation path settings.';
+                    return $result;
+                }
+                if (!$result) {
+                    $this->_configError = '';
+                }
+            } elseif (is_file($this->_configFile) && is_writable($this->_configFile) || is_writable(getcwd())) {
+                try {
+                    $f = fopen($this->_configFile, "w+");
+                    fwrite($f, self::HEADER);
+                    fwrite($f, $data);
+                    fclose($f);
+                    $result = true;
+                } catch (Exception $e) {
+                    $result = false;
+                }
             }
         }
+        return $result;
     }
 
+    /**
+     * Validate value for configuration key
+     *
+     * @param string $key
+     * @param mixed $val
+     * @return bool
+     */
     public function validate($key, $val)
     {
         $rules = $this->extractField($key, 'rules');
-        if(null === $rules) {
+        if (null === $rules) {
             return true;
-        } elseif( is_array($rules) ) {
+        } elseif ( is_array($rules) ) {
             return in_array($val, $rules);
         }
         return false;
     }
 
+    /**
+     * Get possible values for configuration key
+     *
+     * @param string $key
+     * @return null|string
+     */
     public function possible($key)
     {
         $data = $this->getKey($key);
-        if(! $data) {
+        if (! $data) {
             return null;
         }
-        if('set' == $data['type']) {
+        if ('set' == $data['type']) {
             return implode("|", $data['rules']);
         }
-        if(!empty($data['possible'])) {
+        if (!empty($data['possible'])) {
             return $data['possible'];
         }
-        return "<".$data['type'].">";
+        return "<" . $data['type'] . ">";
     }
 
+    /**
+     * Get type of key
+     *
+     * @param string $key
+     * @return mixed|null
+     */
     public function type($key)
     {
         return $this->extractField($key, 'type');
     }
 
+    /**
+     * Get documentation information
+     *
+     * @param string $key
+     * @return mixed|null
+     */
     public function doc($key)
     {
         return $this->extractField($key, 'doc');
     }
 
+    /**
+     * Get property of key
+     *
+     * @param $key
+     * @param $field
+     * @return mixed|null
+     */
     public function extractField($key, $field)
     {
-        if(!isset($this->properties[$key][$field])) {
+        if (!isset($this->properties[$key][$field])) {
             return null;
         }
         return $this->properties[$key][$field];
     }
 
+    /**
+     * Check Key exists in properties array
+     *
+     * @param string $fld
+     * @return bool
+     */
     public function hasKey($fld)
     {
         return isset($this->properties[$fld]);
     }
 
+    /**
+     * Get all Key properties
+     *
+     * @param $fld
+     * @return null
+     */
     public function getKey($fld)
     {
-        if($this->hasKey($fld)) {
+        if ($this->hasKey($fld)) {
             return $this->properties[$fld];
         }
         return null;
     }
 
+    /**
+     * Set the internal pointer of the Properties array to its first element
+     *
+     * @return void
+     */
     public function rewind() {
         reset($this->properties);
     }
 
+    /**
+     * Validate current property
+     *
+     * @return bool
+     */
     public function valid() {
         return current($this->properties) !== false;
     }
 
+    /**
+     * Get Key of current property
+     *
+     * @return mixed
+     */
     public function key() {
         return key($this->properties);
     }
 
+    /**
+     * Get current Property
+     *
+     * @return mixed
+     */
     public function current() {
         return current($this->properties);
     }
 
+    /**
+     * Advance the internal array pointer of the Properties array
+     *
+     * @return void
+     */
     public function next() {
         next($this->properties);
     }
 
+    /**
+     * Retrieve value of property
+     *
+     * @param string $var
+     * @return null
+     */
     public function __get($var)
     {
         if (isset($this->properties[$var]['value'])) {
@@ -305,6 +526,13 @@ implements Iterator
         return null;
     }
 
+    /**
+     * Set value of property
+     *
+     * @param string $var
+     * @param mixed $value
+     * @return void
+     */
     public function __set($var, $value)
     {
         if (is_string($value)) {
@@ -314,17 +542,23 @@ implements Iterator
             if ($value === null) {
                 $value = '';
             }
-            if($this->properties[$var]['value'] !== $value) {
+            if ($this->properties[$var]['value'] !== $value) {
                 $this->properties[$var]['value'] = $value;
                 $this->store();
             }
         }
     }
 
+    /**
+     * Prepare Array of class properties
+     *
+     * @param bool $withRules
+     * @return array
+     */
     public function toArray($withRules = false)
     {
         $out = array();
-        foreach($this as $k=>$v) {
+        foreach ($this as $k=>$v) {
             $out[$k] = $withRules ? $v : $v['value'];
         }
         return $out;
@@ -342,5 +576,42 @@ implements Iterator
             return $this->defaultProperties[$key]['value'];
         }
         return false;
+    }
+
+    /**
+     * Check is config loaded
+     *
+     * @return string
+     */
+    public function isLoaded()
+    {
+        return $this->_configLoaded;
+    }
+
+    /**
+     * Retrieve error message
+     *
+     * @return string
+     */
+    public function getError()
+    {
+        return $this->_configError;
+    }
+
+    /**
+     * Save config
+     *
+     * @return string
+     */
+    public function save()
+    {
+        $forceSave = $this->_forceSave;
+        $this->_forceSave = true;
+
+        $result = $this->store();
+
+        $this->_forceSave = $forceSave;
+
+        return $result;
     }
 }

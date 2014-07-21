@@ -19,7 +19,7 @@
  *
  * @category    Varien
  * @package     js
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
  */
 function popWin(url,win,para) {
@@ -198,8 +198,8 @@ function decorateDataList(list) {
  * Parse SID and produces the correct URL
  */
 function parseSidUrl(baseUrl, urlExt) {
-    sidPos = baseUrl.indexOf('/?SID=');
-    sid = '';
+    var sidPos = baseUrl.indexOf('/?SID=');
+    var sid = '';
     urlExt = (urlExt != undefined) ? urlExt : '';
 
     if(sidPos > -1) {
@@ -219,18 +219,20 @@ function parseSidUrl(baseUrl, urlExt) {
  */
 
 function formatCurrency(price, format, showPlus){
-    precision = isNaN(format.precision = Math.abs(format.precision)) ? 2 : format.precision;
-    requiredPrecision = isNaN(format.requiredPrecision = Math.abs(format.requiredPrecision)) ? 2 : format.requiredPrecision;
+    var precision = isNaN(format.precision = Math.abs(format.precision)) ? 2 : format.precision;
+    var requiredPrecision = isNaN(format.requiredPrecision = Math.abs(format.requiredPrecision)) ? 2 : format.requiredPrecision;
 
     //precision = (precision > requiredPrecision) ? precision : requiredPrecision;
     //for now we don't need this difference so precision is requiredPrecision
     precision = requiredPrecision;
 
-    integerRequired = isNaN(format.integerRequired = Math.abs(format.integerRequired)) ? 1 : format.integerRequired;
+    var integerRequired = isNaN(format.integerRequired = Math.abs(format.integerRequired)) ? 1 : format.integerRequired;
 
-    decimalSymbol = format.decimalSymbol == undefined ? "," : format.decimalSymbol;
-    groupSymbol = format.groupSymbol == undefined ? "." : format.groupSymbol;
-    groupLength = format.groupLength == undefined ? 3 : format.groupLength;
+    var decimalSymbol = format.decimalSymbol == undefined ? "," : format.decimalSymbol;
+    var groupSymbol = format.groupSymbol == undefined ? "." : format.groupSymbol;
+    var groupLength = format.groupLength == undefined ? 3 : format.groupLength;
+
+    var s = '';
 
     if (showPlus == undefined || showPlus == true) {
         s = price < 0 ? "-" : ( showPlus ? "+" : "");
@@ -238,10 +240,9 @@ function formatCurrency(price, format, showPlus){
         s = '';
     }
 
-    i = parseInt(price = Math.abs(+price || 0).toFixed(precision)) + "";
-    pad = (i.length < integerRequired) ? (integerRequired - i.length) : 0;
+    var i = parseInt(price = Math.abs(+price || 0).toFixed(precision)) + "";
+    var pad = (i.length < integerRequired) ? (integerRequired - i.length) : 0;
     while (pad) { i = '0' + i; pad--; }
-
     j = (j = i.length) > groupLength ? j % groupLength : 0;
     re = new RegExp("(\\d{" + groupLength + "})(?=\\d)", "g");
 
@@ -250,8 +251,8 @@ function formatCurrency(price, format, showPlus){
      * when Math.abs(0).toFixed() executed on "0" number.
      * Result is "0.-0" :(
      */
-    r = (j ? i.substr(0, j) + groupSymbol : "") + i.substr(j).replace(re, "$1" + groupSymbol) + (precision ? decimalSymbol + Math.abs(price - i).toFixed(precision).replace(/-/, 0).slice(2) : "")
-
+    var r = (j ? i.substr(0, j) + groupSymbol : "") + i.substr(j).replace(re, "$1" + groupSymbol) + (precision ? decimalSymbol + Math.abs(price - i).toFixed(precision).replace(/-/, 0).slice(2) : "")
+    var pattern = '';
     if (format.pattern.indexOf('{sign}') == -1) {
         pattern = s + format.pattern;
     } else {
@@ -435,7 +436,10 @@ Varien.DateElement.prototype = {
         this.advice.hide();
     },
     validate: function() {
-        var error = false, day = parseInt(this.day.value) || 0, month = parseInt(this.month.value) || 0, year = parseInt(this.year.value) || 0;
+        var error = false,
+            day = parseInt(this.day.value.replace(/^0*/, '')) || 0,
+            month = parseInt(this.month.value.replace(/^0*/, '')) || 0,
+            year = parseInt(this.year.value) || 0;
         if (!day && !month && !year) {
             if (this.required) {
                 error = 'This date is a required value.';
@@ -630,6 +634,7 @@ Element.addMethods({
     }
 });
 
+/*
 if (!("console" in window) || !("firebug" in console))
 {
     var names = ["log", "debug", "info", "warn", "error", "assert", "dir", "dirxml",
@@ -639,6 +644,7 @@ if (!("console" in window) || !("firebug" in console))
     for (var i = 0; i < names.length; ++i)
         window.console[names[i]] = function() {}
 }
+*/
 
 /**
  * Executes event handler on the element. Works with event handlers attached by Prototype,
@@ -648,16 +654,51 @@ if (!("console" in window) || !("firebug" in console))
  *
  * @example fireEvent($('my-input', 'click'));
  */
-function fireEvent(element, event){
-    if (document.createEventObject){
-        // dispatch for IE
-        var evt = document.createEventObject();
-        return element.fireEvent('on'+event,evt)
-    }
-    else{
-        // dispatch for firefox + others
+function fireEvent(element, event) {
+    if (document.createEvent) {
+        // dispatch for all browsers except IE before version 9
         var evt = document.createEvent("HTMLEvents");
-        evt.initEvent(event, true, true ); // event type,bubbling,cancelable
-        return !element.dispatchEvent(evt);
+        evt.initEvent(event, true, true ); // event type, bubbling, cancelable
+        return element.dispatchEvent(evt);
+    } else {
+        // dispatch for IE before version 9
+        var evt = document.createEventObject();
+        return element.fireEvent('on' + event, evt)
     }
+}
+
+/**
+ * Returns more accurate results of floating-point modulo division
+ * E.g.:
+ * 0.6 % 0.2 = 0.19999999999999996
+ * modulo(0.6, 0.2) = 0
+ *
+ * @param dividend
+ * @param divisor
+ */
+function modulo(dividend, divisor)
+{
+    var epsilon = divisor / 10000;
+    var remainder = dividend % divisor;
+
+    if (Math.abs(remainder - divisor) < epsilon || Math.abs(remainder) < epsilon) {
+        remainder = 0;
+    }
+
+    return remainder;
+}
+
+/**
+ * createContextualFragment is not supported in IE9. Adding its support.
+ */
+if ((typeof Range != "undefined") && !Range.prototype.createContextualFragment)
+{
+    Range.prototype.createContextualFragment = function(html)
+    {
+        var frag = document.createDocumentFragment(),
+        div = document.createElement("div");
+        frag.appendChild(div);
+        div.outerHTML = html;
+        return frag;
+    };
 }

@@ -20,7 +20,7 @@
  *
  * @category    Mage
  * @package     Mage_Catalog
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -183,11 +183,6 @@ class Mage_Catalog_Model_Category extends Mage_Catalog_Model_Abstract
     public function move($parentId, $afterCategoryId)
     {
         /**
-         * Setting affected category ids for third party engine index refresh
-        */
-        $this->setMovedCategoryId($this->getId());
-
-        /**
          * Validate new parent category id. (category model is used for backward
          * compatibility in event params)
          */
@@ -200,6 +195,21 @@ class Mage_Catalog_Model_Category extends Mage_Catalog_Model_Abstract
                 Mage::helper('catalog')->__('Category move operation is not possible: the new parent category was not found.')
             );
         }
+
+        if (!$this->getId()) {
+            Mage::throwException(
+                Mage::helper('catalog')->__('Category move operation is not possible: the current category was not found.')
+            );
+        } elseif ($parent->getId() == $this->getId()) {
+            Mage::throwException(
+                Mage::helper('catalog')->__('Category move operation is not possible: parent category is equal to child category.')
+            );
+        }
+
+        /**
+         * Setting affected category ids for third party engine index refresh
+        */
+        $this->setMovedCategoryId($this->getId());
 
         $eventParams = array(
             $this->_eventObject => $this,
@@ -586,7 +596,7 @@ class Mage_Catalog_Model_Category extends Mage_Catalog_Model_Abstract
         }
         else {
             $attribute = Mage::getSingleton('catalog/config')
-                ->getAttribute('catalog_category', $attributeCode);
+                ->getAttribute(self::ENTITY, $attributeCode);
         }
         return $attribute;
     }
@@ -727,7 +737,7 @@ class Mage_Catalog_Model_Category extends Mage_Catalog_Model_Abstract
     }
 
     /**
-     * Retrieve Name data wraper
+     * Retrieve Name data wrapper
      *
      * @return string
      */
@@ -924,16 +934,16 @@ class Mage_Catalog_Model_Category extends Mage_Catalog_Model_Abstract
     }
 
     /**
-     * Init indexing process after category data commit
+     * Init indexing process after category save
      *
      * @return Mage_Catalog_Model_Category
      */
-    public function afterCommitCallback()
+    protected function _afterSave()
     {
-        parent::afterCommitCallback();
+        $result = parent::_afterSave();
         Mage::getSingleton('index/indexer')->processEntityAction(
             $this, self::ENTITY, Mage_Index_Model_Event::TYPE_SAVE
         );
-        return $this;
+        return $result;
     }
 }

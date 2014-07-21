@@ -20,7 +20,7 @@
  *
  * @category    Mage
  * @package     Mage_Adminhtml
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -115,18 +115,27 @@ class Mage_Adminhtml_Block_Customer_Edit_Tab_Addresses extends Mage_Adminhtml_Bl
         );
 
         $addressModel = Mage::getModel('customer/address');
-        /* @var $addressForm Mage_Customer_Model_Form */
+        $addressModel->setCountryId(Mage::helper('core')->getDefaultCountry($customer->getStore()));
+        /** @var $addressForm Mage_Customer_Model_Form */
         $addressForm = Mage::getModel('customer/form');
         $addressForm->setFormCode('adminhtml_customer_address')
-            ->setEntity($addressModel);
+            ->setEntity($addressModel)
+            ->initDefaultValues();
 
         $attributes = $addressForm->getAttributes();
+        if(isset($attributes['street'])) {
+            Mage::helper('adminhtml/addresses')
+                ->processStreetAttribute($attributes['street']);
+        }
         foreach ($attributes as $attribute) {
+            /* @var $attribute Mage_Eav_Model_Entity_Attribute */
+            $attribute->setFrontendLabel(Mage::helper('customer')->__($attribute->getFrontend()->getLabel()));
             $attribute->unsIsVisible();
         }
         $this->_setFieldset($attributes, $fieldset);
 
         $regionElement = $form->getElement('region');
+        $regionElement->setRequired(true);
         if ($regionElement) {
             $regionElement->setRenderer(Mage::getModel('adminhtml/customer_renderer_region'));
         }
@@ -186,6 +195,7 @@ class Mage_Adminhtml_Block_Customer_Edit_Tab_Addresses extends Mage_Adminhtml_Bl
         $addressCollection = $customer->getAddresses();
         $this->assign('customer', $customer);
         $this->assign('addressCollection', $addressCollection);
+        $form->setValues($addressModel->getData());
         $this->setForm($form);
 
         return $this;

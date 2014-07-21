@@ -147,7 +147,7 @@ class Varien_File_Uploader
     function __construct($fileId)
     {
         $this->_setUploadFileId($fileId);
-        if( !file_exists($this->_file['tmp_name']) ) {
+        if(!file_exists($this->_file['tmp_name'])) {
             $code = empty($this->_file['tmp_name']) ? self::TMP_NAME_EMPTY : 0;
             throw new Exception('File was not uploaded.', $code);
         } else {
@@ -190,7 +190,8 @@ class Varien_File_Uploader
         $this->_result = false;
 
         $destinationFile = $destinationFolder;
-        $fileName = isset($newFileName) ? $newFileName : self::getCorrectFileName($this->_file['name']);
+        $fileName = isset($newFileName) ? $newFileName : $this->_file['name'];
+        $fileName = self::getCorrectFileName($fileName);
         if ($this->_enableFilesDispersion) {
             $fileName = $this->correctFileNameCase($fileName);
             $this->setAllowCreateFolders(true);
@@ -205,7 +206,7 @@ class Varien_File_Uploader
 
         $destinationFile = self::_addDirSeparator($destinationFile) . $fileName;
 
-        $this->_result = move_uploaded_file($this->_file['tmp_name'], $destinationFile);
+        $this->_result = $this->_moveFile($this->_file['tmp_name'], $destinationFile);
 
         if ($this->_result) {
             chmod($destinationFile, 0777);
@@ -226,30 +227,48 @@ class Varien_File_Uploader
     }
 
     /**
+     * Move files from TMP folder into destination folder
+     *
+     * @param string $tmpPath
+     * @param string $destPath
+     * @return bool
+     */
+    protected function _moveFile($tmpPath, $destPath)
+    {
+        return move_uploaded_file($tmpPath, $destPath);
+    }
+
+    /**
      * Validate file before save
      *
      * @access public
      */
     protected function _validateFile()
     {
-        if( $this->_fileExists === false ) {
+        if ($this->_fileExists === false) {
             return;
         }
 
-        $filePath = $this->_file['tmp_name'];
-        $fileName = $this->_file['name'];
-
         //is file extension allowed
-        $fileExtension = substr($fileName, strrpos($fileName, '.')+1);
-        if (!$this->checkAllowedExtension($fileExtension)) {
+        if (!$this->checkAllowedExtension($this->getFileExtension())) {
             throw new Exception('Disallowed file type.');
         }
         //run validate callbacks
         foreach ($this->_validateCallbacks as $params) {
             if (is_object($params['object']) && method_exists($params['object'], $params['method'])) {
-                $params['object']->$params['method']($filePath);
+                $params['object']->$params['method']($this->_file['tmp_name']);
             }
         }
+    }
+
+    /**
+     * Returns extension of the uploaded file
+     *
+     * @return string
+     */
+    public function getFileExtension()
+    {
+        return $this->_fileExists ? pathinfo($this->_file['name'], PATHINFO_EXTENSION) : '';
     }
 
     /**
@@ -488,33 +507,6 @@ class Varien_File_Uploader
 
         if (!(@is_dir($destinationFolder) || @mkdir($destinationFolder, 0777, true))) {
             throw new Exception("Unable to create directory '{$destinationFolder}'.");
-        }
-        return $this;
-
-        $destinationFolder = str_replace('/', DIRECTORY_SEPARATOR, $destinationFolder);
-        $path = explode(DIRECTORY_SEPARATOR, $destinationFolder);
-        $newPath = null;
-        $oldPath = null;
-        foreach ($path as $key => $directory) {
-            if (trim($directory) == '') {
-                continue;
-            }
-            if (strlen($directory) === 2 && $directory{1} === ':') {
-                $newPath = $directory;
-                continue;
-            }
-            $newPath .= ($newPath != DIRECTORY_SEPARATOR) ? DIRECTORY_SEPARATOR . $directory : $directory;
-            if(is_dir($newPath)) {
-                $oldPath = $newPath;
-                continue;
-            } else {
-                if(is_writable($oldPath)) {
-                    mkdir($newPath, 0777);
-                } else {
-                    throw new Exception("Unable to create directory '{$newPath}'. Access forbidden.");
-                }
-            }
-            $oldPath = $newPath;
         }
         return $this;
     }

@@ -20,7 +20,7 @@
  *
  * @category    Mage
  * @package     Mage_Adminhtml
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -71,30 +71,35 @@ class Mage_Adminhtml_RatingController extends Mage_Adminhtml_Controller_Action
         $this->_forward('edit');
     }
 
+    /**
+     * Save rating
+     */
     public function saveAction()
     {
         $this->_initEnityId();
 
-        if ( $this->getRequest()->getPost() ) {
+        if ($this->getRequest()->getPost()) {
             try {
                 $ratingModel = Mage::getModel('rating/rating');
 
                 $stores = $this->getRequest()->getParam('stores');
+                $position = (int)$this->getRequest()->getParam('position');
                 $stores[] = 0;
                 $ratingModel->setRatingCode($this->getRequest()->getParam('rating_code'))
-                      ->setRatingCodes($this->getRequest()->getParam('rating_codes'))
-                      ->setStores($stores)
-                      ->setId($this->getRequest()->getParam('id'))
-                      ->setEntityId(Mage::registry('entityId'))
-                      ->save();
+                    ->setRatingCodes($this->getRequest()->getParam('rating_codes'))
+                    ->setStores($stores)
+                    ->setPosition($position)
+                    ->setId($this->getRequest()->getParam('id'))
+                    ->setEntityId(Mage::registry('entityId'))
+                    ->save();
 
                 $options = $this->getRequest()->getParam('option_title');
 
-                if( is_array($options) ) {
+                if (is_array($options)) {
                     $i = 1;
-                    foreach( $options as $key => $optionCode ) {
+                    foreach ($options as $key => $optionCode) {
                         $optionModel = Mage::getModel('rating/rating_option');
-                        if( !preg_match("/^add_([0-9]*?)$/", $key) ) {
+                        if (!preg_match("/^add_([0-9]*?)$/", $key)) {
                             $optionModel->setId($key);
                         }
 
@@ -128,7 +133,7 @@ class Mage_Adminhtml_RatingController extends Mage_Adminhtml_Controller_Action
             try {
                 $model = Mage::getModel('rating/rating');
                 /* @var $model Mage_Rating_Model_Rating */
-                $model->setId($this->getRequest()->getParam('id'))
+                $model->load($this->getRequest()->getParam('id'))
                     ->delete();
                 Mage::getSingleton('adminhtml/session')->addSuccess(Mage::helper('adminhtml')->__('The rating has been deleted.'));
                 $this->_redirect('*/*/');

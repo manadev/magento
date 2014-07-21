@@ -20,7 +20,7 @@
  *
  * @category    design
  * @package     default_default
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
  */
 ?>
@@ -29,59 +29,13 @@
  * @see Mage_Paypal_Block_Adminhtml_System_Config_Payflowlink_Info
  */
 ?>
-<div style="padding-bottom: 1em;">
-    <strong style="color:red"><?php echo $this->__('Important: ') ?></strong>
-    <?php echo $this->__('To use Payflow Link, you must configure your Payflow Link account on the Paypal website.') ?><br />
-    <?php echo $this->__('Once you log into your Payflow Link account, navigate to the Service Settings - Hosted Checkout Pages - Set Up menu and set the options described below') ?>
-    <div>
-        <u><?php echo $this->__('Required settings') ?></u>
-        <?php echo $this->__(' note that the URLs provided below are the correct values for your current website): ') ?>
-    </div>
-    <ul style="list-style:disc; padding-left:2em;">
-        <li>
-            <strong><?php echo $this->__('Cancel URL: ') ?></strong><br />
-            <a href="<?php echo $this->getFrontendUrl('paypal/payflow/cancelPayment') ?>" onclick="return false;">
-                <?php echo $this->getFrontendUrl('paypal/payflow/cancelPayment') ?>
-            </a>
-        </li>
-        <li>
-            <strong><?php echo $this->__('Show confirmation page: ') ?></strong>
-            <?php echo $this->__('On my website') ?>
-        </li>
-        <li>
-            <strong><?php echo $this->__('Return URL: ') ?></strong><br />
-            <a href="<?php echo $this->getFrontendUrl('paypal/payflow/returnUrl') ?>" onclick="return false;">
-                <?php echo $this->getFrontendUrl('paypal/payflow/returnUrl') ?>
-            </a>
-        </li>
-        <li>
-            <strong><?php echo $this->__('Use Silent Post:') ?></strong><br />
-            <?php echo $this->__('Yes') ?>
-        </li>
-        <li>
-            <strong><?php echo $this->__('Silent Post URL:') ?></strong><br />
-            <a href="<?php echo $this->getFrontendUrl('paypal/payflow/silentPost') ?>" onclick="return false;">
-                <?php echo $this->getFrontendUrl('paypal/payflow/silentPost') ?>
-            </a>
-        </li>
-            <li>
-            <strong><?php echo $this->__('Enable Secure Token:') ?></strong><br />
-            <?php echo $this->__('Yes') ?>
-        </li>
-    </ul>
-    <div><?php echo $this->__('Note:') ?></div>
-    <ul style="list-style:disc; padding-left:2em;">
-        <li>
-            <?php echo $this->__('Do not set any fields in the Billing and Shipping Information block as editable in your Payflow accout.') ?>
-        </li>
-        <li>
-            <?php echo $this->__('Do not enable AVS or CSC options.  The do not work when using Payflow Link Silent Mode.') ?>
-        </li>
-        <li>
-            <?php echo $this->__('If your Magento instance is used for multiple websites, you must configure a separate Payflow Link account for each website.') ?>
-        </li>
-        <li>
-            <?php echo $this->__('Make sure that you configure the design settings for the Payflow Link form in your Payflow link account.') ?>
-        </li>
+<div class="payflow-settings-notice">
+    <strong class="important-label"><?php echo $this->__('Important: ') ?></strong>
+    <?php echo $this->__('To use PayPal Payflow Link, you must configure your PayPal Payflow Link account on the PayPal website.'); ?>
+    <?php echo $this->__('Once you log into your PayPal Payflow Link account, navigate to the Service Settings - Hosted Checkout Pages - Set Up menu and set the options described below') ?>
+    <ul class="options-list">
+        <li><strong>AVS:</strong> No</li>
+        <li><strong>CSC:</strong> No</li>
+        <li><strong>Enable Secure Token:</strong> Yes</li>
     </ul>
 </div>

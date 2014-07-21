@@ -20,7 +20,7 @@
  *
  * @category    Mage
  * @package     Mage_Customer
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -42,11 +42,7 @@ class Mage_Customer_Block_Widget_Name extends Mage_Customer_Block_Widget_Abstrac
      */
     protected function _showConfig($key)
     {
-        $value = $this->getConfig($key);
-        if (empty($value)) {
-            return false;
-        }
-        return true;
+        return (bool)$this->getConfig($key);
     }
 
     /**
@@ -70,13 +66,14 @@ class Mage_Customer_Block_Widget_Name extends Mage_Customer_Block_Widget_Abstrac
     }
 
     /**
-     * Retrieve name prefix dropdown options
+     * Retrieve name prefix drop-down options
      *
      * @return array|bool
      */
     public function getPrefixOptions()
     {
         $prefixOptions = $this->helper('customer')->getNamePrefixOptions();
+
         if ($this->getObject() && !empty($prefixOptions)) {
             $oldPrefix = $this->escapeHtml(trim($this->getObject()->getPrefix()));
             $prefixOptions[$oldPrefix] = $oldPrefix;
@@ -92,6 +89,16 @@ class Mage_Customer_Block_Widget_Name extends Mage_Customer_Block_Widget_Abstrac
     public function showMiddlename()
     {
         return (bool)$this->_getAttribute('middlename')->getIsVisible();
+    }
+
+    /**
+     * Define if middlename attribute is required
+     *
+     * @return bool
+     */
+    public function isMiddlenameRequired()
+    {
+        return (bool)$this->_getAttribute('middlename')->getIsRequired();
     }
 
     /**
@@ -115,7 +122,7 @@ class Mage_Customer_Block_Widget_Name extends Mage_Customer_Block_Widget_Abstrac
     }
 
     /**
-     * Retrieve name suffix dropdown options
+     * Retrieve name suffix drop-down options
      *
      * @return array|bool
      */
@@ -157,16 +164,38 @@ class Mage_Customer_Block_Widget_Name extends Mage_Customer_Block_Widget_Abstrac
     }
 
     /**
-     * Retrieve customer attribute instance
+     * Retrieve customer or customer address attribute instance
      *
      * @param string $attributeCode
-     * @return Mage_Customer_Model_Attribute
+     * @return Mage_Customer_Model_Attribute|false
      */
     protected function _getAttribute($attributeCode)
     {
-        if (!($this->getObject() instanceof Mage_Customer_Model_Customer)) {
-            return Mage::getSingleton('eav/config')->getAttribute('customer_address', $attributeCode);
+        if ($this->getForceUseCustomerAttributes() || $this->getObject() instanceof Mage_Customer_Model_Customer) {
+            return parent::_getAttribute($attributeCode);
         }
-        return parent::_getAttribute($attributeCode);
+
+        $attribute = Mage::getSingleton('eav/config')->getAttribute('customer_address', $attributeCode);
+
+        if ($this->getForceUseCustomerRequiredAttributes() && $attribute && !$attribute->getIsRequired()) {
+            $customerAttribute = parent::_getAttribute($attributeCode);
+            if ($customerAttribute && $customerAttribute->getIsRequired()) {
+                $attribute = $customerAttribute;
+            }
+        }
+
+        return $attribute;
+    }
+
+    /**
+     * Retrieve store attribute label
+     *
+     * @param string $attributeCode
+     * @return string
+     */
+    public function getStoreLabel($attributeCode)
+    {
+        $attribute = $this->_getAttribute($attributeCode);
+        return $attribute ? $this->__($attribute->getStoreLabel()) : '';
     }
 }

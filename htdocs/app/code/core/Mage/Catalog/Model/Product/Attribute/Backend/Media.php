@@ -20,7 +20,7 @@
  *
  * @category    Mage
  * @package     Mage_Catalog
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -150,7 +150,7 @@ class Mage_Catalog_Model_Product_Attribute_Backend_Media extends Mage_Eav_Model_
             $attrData = $object->getData($mediaAttrCode);
 
             if (in_array($attrData, $clearImages)) {
-                $object->setData($mediaAttrCode, false);
+                $object->setData($mediaAttrCode, 'no_selection');
             }
 
             if (in_array($attrData, array_keys($newImages))) {
@@ -162,6 +162,8 @@ class Mage_Catalog_Model_Product_Attribute_Backend_Media extends Mage_Eav_Model_
                 $object->setData($mediaAttrCode.'_label', $existImages[$attrData]['label']);
             }
         }
+
+        Mage::dispatchEvent('catalog_product_media_save_before', array('product' => $object, 'images' => $value));
 
         $object->setData($attrCode, $value);
 
@@ -195,11 +197,30 @@ class Mage_Catalog_Model_Product_Attribute_Backend_Media extends Mage_Eav_Model_
         if (!is_array($value) || !isset($value['images']) || $object->isLockedAttribute($attrCode)) {
             return;
         }
+
+        $storeId = $object->getStoreId();
+
+        $storeIds = $object->getStoreIds();
+        $storeIds[] = Mage_Core_Model_App::ADMIN_STORE_ID;
+
+        // remove current storeId
+        $storeIds = array_flip($storeIds);
+        unset($storeIds[$storeId]);
+        $storeIds = array_keys($storeIds);
+
+        $images = Mage::getResourceModel('catalog/product')
+            ->getAssignedImages($object, $storeIds);
+
+        $picturesInOtherStores = array();
+        foreach ($images as $image) {
+            $picturesInOtherStores[$image['filepath']] = true;
+        }
+
         $toDelete = array();
         $filesToValueIds = array();
         foreach ($value['images'] as &$image) {
             if(!empty($image['removed'])) {
-                if(isset($image['value_id'])) {
+                if(isset($image['value_id']) && !isset($picturesInOtherStores[$image['file']])) {
                     $toDelete[] = $image['value_id'];
                 }
                 continue;
@@ -248,6 +269,9 @@ class Mage_Catalog_Model_Product_Attribute_Backend_Media extends Mage_Eav_Model_
         if (!$file || !file_exists($file)) {
             Mage::throwException(Mage::helper('catalog')->__('Image does not exist.'));
         }
+
+        Mage::dispatchEvent('catalog_product_media_add_image', array('product' => $product, 'image' => $file));
+
         $pathinfo = pathinfo($file);
         $imgExtensions = array('jpg','jpeg','gif','png');
         if (!isset($pathinfo['extension']) || !in_array(strtolower($pathinfo['extension']), $imgExtensions)) {

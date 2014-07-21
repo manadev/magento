@@ -20,7 +20,7 @@
  *
  * @category    Mage
  * @package     Mage_Paypal
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  */
 
@@ -97,23 +97,22 @@ class Mage_Paypal_Model_Ipn
      */
     public function processIpnRequest(array $request, Zend_Http_Client_Adapter_Interface $httpAdapter = null)
     {
-        $this->_request = $request;
-        $this->_config = Mage::getModel('paypal/config'); // empty config model, without specific payment method
-        if (isset($request['test_ipn']) && 1 == $request['test_ipn']) {
-            $this->_config->sandboxFlag = true;
-        }
-        $this->_config->debug = true;
-
+        $this->_request   = $request;
         $this->_debugData = array('ipn' => $request);
         ksort($this->_debugData['ipn']);
 
         try {
-            if ($httpAdapter) {
-                $this->_postBack($httpAdapter);
-            }
             if (isset($this->_request['txn_type']) && 'recurring_payment' == $this->_request['txn_type']) {
+                $this->_getRecurringProfile();
+                if ($httpAdapter) {
+                    $this->_postBack($httpAdapter);
+                }
                 $this->_processRecurringProfile();
             } else {
+                $this->_getOrder();
+                if ($httpAdapter) {
+                    $this->_postBack($httpAdapter);
+                }
                 $this->_processOrder();
             }
         } catch (Exception $e) {
@@ -133,13 +132,14 @@ class Mage_Paypal_Model_Ipn
     {
             $sReq = '';
             foreach ($this->_request as $k => $v) {
-                $sReq .= '&'.$k.'='.urlencode(stripslashes($v));
+                $sReq .= '&'.$k.'='.urlencode($v);
             }
             $sReq .= "&cmd=_notify-validate";
             $sReq = substr($sReq, 1);
             $this->_debugData['postback'] = $sReq;
             $this->_debugData['postback_to'] = $this->_config->getPaypalUrl();
 
+            $httpAdapter->setConfig(array('verifypeer' => $this->_config->verifyPeer));
             $httpAdapter->write(Zend_Http_Client::POST, $this->_config->getPaypalUrl(), '1.1', array(), $sReq);
             try {
                 $response = $httpAdapter->read();
@@ -171,7 +171,12 @@ class Mage_Paypal_Model_Ipn
             $id = $this->_request['invoice'];
             $this->_order = Mage::getModel('sales/order')->loadByIncrementId($id);
             if (!$this->_order->getId()) {
-                throw new Exception(sprintf('Wrong order ID: "%s".', $id));
+                $this->_debugData['exception'] = sprintf('Wrong order ID: "%s".', $id);
+                $this->_debug();
+                Mage::app()->getResponse()
+                    ->setHeader('HTTP/1.1','503 Service Unavailable')
+                    ->sendResponse();
+                exit;
             }
             // re-initialize config with the method code and store id
             $methodCode = $this->_order->getPayment()->getMethod();
@@ -230,7 +235,7 @@ class Mage_Paypal_Model_Ipn
             if (!$receiverEmail) {
                 $receiverEmail = $this->getRequestData('receiver_email');
             }
-            if ($merchantEmail != $receiverEmail) {
+            if (strtolower($merchantEmail) != strtolower($receiverEmail)) {
                 throw new Exception(
                     sprintf(
                         'Requested %s and configured %s merchant emails do not match.', $receiverEmail, $merchantEmail
@@ -394,12 +399,13 @@ class Mage_Paypal_Model_Ipn
         $this->_order->save();
 
         // notify customer
-        if ($invoice = $payment->getCreatedInvoice() && !$this->_order->getEmailSent()) {
-            $comment = $this->_order->sendNewOrderEmail()->addStatusHistoryComment(
-                    Mage::helper('paypal')->__('Notified customer about invoice #%s.', $invoice->getIncrementId())
-                )
-                ->setIsCustomerNotified(true)
-                ->save();
+        $invoice = $payment->getCreatedInvoice();
+        if ($invoice && !$this->_order->getEmailSent()) {
+            $this->_order->sendNewOrderEmail()->addStatusHistoryComment(
+                Mage::helper('paypal')->__('Notified customer about invoice #%s.', $invoice->getIncrementId())
+            )
+            ->setIsCustomerNotified(true)
+            ->save();
         }
     }
 
@@ -537,10 +543,14 @@ class Mage_Paypal_Model_Ipn
     {
         $this->_importPaymentInformation();
 
+        $parentTxnId = $this->getRequestData('transaction_entity') == 'auth'
+            ? $this->getRequestData('txn_id') : $this->getRequestData('parent_txn_id');
+
         $this->_order->getPayment()
             ->setPreparedMessage($this->_createIpnComment(''))
-            ->setParentTransactionId($this->getRequestData('txn_id')) // this is the authorization transaction ID
+            ->setParentTransactionId($parentTxnId)
             ->registerVoidNotification();
+
         $this->_order->save();
     }
 
@@ -677,7 +687,7 @@ class Mage_Paypal_Model_Ipn
      */
     protected function _debug()
     {
-        if ($this->_config->debug) {
+        if ($this->_config && $this->_config->debug) {
             $file = $this->_config->getMethodCode() ? "payment_{$this->_config->getMethodCode()}.log"
                 : self::DEFAULT_LOG_FILE;
             Mage::getModel('core/log_adapter', $file)->log($this->_debugData);

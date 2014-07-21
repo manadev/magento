@@ -20,7 +20,7 @@
  *
  * @category    design
  * @package     default
- * @copyright   Copyright (c) 2010 Magento Inc. (http://www.magentocommerce.com)
+ * @copyright   Copyright (c) 2012 Magento Inc. (http://www.magentocommerce.com)
  * @license     http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
  */
 ?>
@@ -30,18 +30,60 @@
     <h4>Settings</h4>
 </div>
 <ul class="bare-list">
-<li><input type="checkbox" id="maintenance" value="1" checked="checked" /> &nbsp;
-<label for="maintenance">Put store on the maintenance mode while installing/upgrading</label>
-</li>
+    <li>
+        <input type="checkbox" id="maintenance" value="1" checked="checked" /> &nbsp;
+        <label for="maintenance">Put store on the maintenance mode while installing/upgrading/backup creation</label>
+    </li>
+    <li>
+        <table cellpadding="0" cellspacing="0">
+            <tr>
+                <td rowspan="2" valign="top">
+                    <input type="checkbox" id="is_backup" value="1"  /> &nbsp;
+                </td>
+                <td>
+                    <label for="is_backup">Create Backup</label>
+                </td>
+                <td>
+                    &nbsp;<select id="archive_type" style="width: 320px;">
+                        <option value="1">Database</option>
+                        <option value="4">Database and Media</option>
+                        <option value="2">System</option>
+                        <option value="3">System (excluding Media)</option>
+                    </select>
+                </td>
+            </tr>
+            <tr id="backup-name-container" style="display: none; margin-top: 5px;">
+                <td valign="top">
+                    <div style="margin: 6px 0 0 5px;">
+                        <label for="backup_name">Backup Name</label>
+                    </div>
+                </td>
+                <td>
+                    <div style="margin: 6px 0 0 4px;">
+                        <input type="text" name="backup_name" id="backup_name" style="width: 318px;" maxlength="50"/>
+                        <div class="notice-msg">Please use only letters (a-z or A-Z), numbers (0-9) or<br/> space in this field. Other characters are not allowed.</div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </li>
 </ul>
-
 <div class="bar-head">
     <h4>Install New Extensions</h4>
 </div>
 <script type="text/javascript">
 <!--
- function connectPrepare(form) {
-    new Ajax.Request(form.action, { 
+changeAvailableArchiveStatus = function (){
+    $('archive_type').disabled = !$('is_backup').checked;
+    $('is_backup').checked ? $('backup-name-container').show() : $('backup-name-container').hide();
+    $('backup_name').value = '';
+}
+
+Event.observe('is_backup', 'change', changeAvailableArchiveStatus);
+Event.observe(window, 'load', changeAvailableArchiveStatus);
+
+function connectPrepare(form) {
+    new Ajax.Request(form.action, {
       method:'post',
       parameters: {install_package_id: form.install_package_id.value},
       onCreate: function() {
@@ -197,7 +239,7 @@
     </div>
 </form>
 <script type="text/javascript">
-$$('#connect_packages_'+<?php echo $i?>+' select').each(function(el){el.value=''});
+$$('#connect_packages_' + <?php echo $i?> + ' select').each(function(el){el.value=''});
 </script>
 <?php if (++$i != $cnt): ?><div class="divider"></div><?php endif ?>
 <br/>
@@ -210,12 +252,12 @@ $$('#connect_packages_'+<?php echo $i?>+' select').each(function(el){el.value=''
 <div id="connect_iframe_success" style="display:none">
     <?php $this->set('messages', array('success'=>array('Procedure completed. Please check the output frame for useful information and refresh the page to see changes.'))) ?>
     <?php echo $this->template('messages.phtml') ?>
-    <button onclick="location.reload()">Refresh</button>
+    <button onclick="location.href='<?php echo $this->baseUrl() ?>'">Refresh</button>
 </div>
 <div id="connect_iframe_failure" style="display:none">
     <?php $this->set('messages', array('error'=>array('Please check the output frame for errors and refresh the page to retry changes.'))) ?>
     <?php echo $this->template('messages.phtml') ?>
-    <button onclick="location.reload()">Refresh</button>
+    <button onclick="location.href='<?php echo $this->baseUrl() ?>'">Refresh</button>
 </div>
 
 <?php echo $this->template('footer.phtml') ?>
